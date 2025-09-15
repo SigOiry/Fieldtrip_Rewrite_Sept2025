@@ -1,0 +1,34 @@
+project:
+  type: website
+  output-dir: "docs"
+
+website:
+  title: "Bougneuf Bay Field Campaign for Rewrite"
+  navbar:
+    left:
+      - href: index.qmd
+        text: Home
+      # - href: Cadiz_Bay.qmd
+      #   text: Cadiz Bay
+      # - text: Ria de Aveiro Lagoon      # label that shows in the bar
+      #   menu:                   # dropdown starts here
+      #     - href: Aveiro_Lagoon.qmd
+      #       text: Mapping
+      #     - href: Aveiro_Lagoon_Sampling.qmd
+      #       text: Sampling
+      # - text: Bourngeuf Bay     # label that shows in the bar
+      #   menu:                   # dropdown starts here
+      #     - href: Bourgneuf_Bay.qmd
+      #       text: Mapping
+      #     - href: Bourgneuf_Bay_SampingSite.qmd
+      #       text: Sampling Site Selection
+    
+format:
+  html:
+    theme:
+      - sandstone
+    css: styles.css
+    toc: true
+
+editor: source
+

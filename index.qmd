@@ -1,0 +1,62 @@
+---
+title: "Rewrite_BourgneufBay_2025"
+author: "Simon Oiry"
+editor_options: 
+  chunk_output_type: console
+---
+
+# Field trip organisation
+
+The summer field campaign in Bourgneuf Bay took place on September 11th, 2025, at the Barbâtre meadow. Low tide occurred at 14:20 local time, with a tidal range of 4.75 m. We arrived on site around 11:00. Two distinct sampling areas were selected based on the historical consistency of meadow density over the past 40 years. One area, where the meadow has consistently shown more than 50% seagrass cover every year for the last 40 years, was selected (Zone H), as well as an area where meadow cover has been highly inconsistent over the same period (Zone L). In each zone, 30 cores were collected, covering a gradient of seagrass cover from low (SPC < 20%) to high (SPC > 80%). Each core was 20 cm deep to harvest seagrass leaves, rhizomes, and associated fauna.
+
+Only in Zone H, before coring, a hyperspectral signature of the sample was taken using an ASD Fieldspec HandHeld 2. The instrument was calibrated in the field for reflectance acquisition using a Spectralon with a 99% reflective Lambertian surface (No radiance measurment has been done).
+
+```{r leafletmap}
+#| fig-cap: Map of Bourgneuf Bay Sampling site
+#| echo: false
+#| error: false
+#| message: false
+#| warning: false
+#| out-width: "95%"
+
+
+library(tidyverse)
+library(leaflet)
+library(sf)
+library(leafem)
+library(leaflet.extras2)
+library(terra)
+
+# folder structure: ./www/imgs/...
+img_list <- list.files("imgs", recursive = TRUE, full.names = TRUE, pattern = "\\.jpg$") %>%
+  tibble(path = .) %>%
+  mutate(filename = basename(path),
+         station  = substr(filename, 1, 4),
+         url      = paste0("../",file.path("imgs", filename)))
+
+Points <- sf::st_read("shp/Core_Location/Points.shp", quiet = TRUE) %>%
+  left_join(img_list, by = c("Name" = "station")) %>%
+  filter(!is.na(url))
+
+leaflet() %>%
+  setView(lng = -2.176695, lat = 46.962474, zoom = 15) %>%
+  addProviderTiles(providers$Esri.WorldImagery, group = "Imagery",
+                   options = providerTileOptions(minZoom = 8, maxZoom = 20)) %>%
+  addCircleMarkers(
+    data = Points, radius = 2, color = "lightgreen", fillColor = "lightgreen", fillOpacity = 0.8,
+    group = "Coring stations",
+    popup = ~sprintf("<img src='%s' width='400'/>", url),
+    popupOptions = popupOptions(
+    maxWidth  = 450,    # Maximum width of the popup
+    minWidth  = 100,    # Minimum width of the popup
+    maxHeight = 600)
+  ) %>%
+  addLayersControl(overlayGroups = "Coring stations",
+                   options = layersControlOptions(collapsed = FALSE))
+
+
+# htmlwidgets::saveWidget(plot_S2, file="maps/map_Bathy_Quiberon.html", selfcontained = F)
+
+
+```
+
