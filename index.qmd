@@ -240,7 +240,7 @@ img_list <- list.files("data/imgs", recursive = TRUE, full.names = TRUE, pattern
   tibble(path = .) %>%
   mutate(filename = basename(path),
          station  = substr(filename, 1, 4),
-         url      = paste0("../",file.path("data/imgs", filename)))
+         url      = paste0(file.path("imgs", filename)))
 
 Points <- sf::st_read("data/shp/Core_Location/Points.shp", quiet = TRUE) %>%
   left_join(img_list, by = c("Name" = "station")) %>%
