@@ -3,35 +3,164 @@ title: "Rewrite_BourgneufBay_2025"
 author: "Simon Oiry"
 editor_options: 
   chunk_output_type: console
+editor: 
+  markdown: 
+    wrap: 72
 ---
 
 # Field trip organisation
 
-The summer field campaign in Bourgneuf Bay took place on September 11th, 2025, at the Barbâtre meadow. Low tide occurred at 14:20 local time, with a tidal range of 4.75 m. We arrived on site around 11:00. Two distinct sampling areas were selected based on the historical consistency of meadow density over the past 40 years. One area, where the meadow has consistently shown more than 50% seagrass cover every year for the last 40 years, was selected (Zone H), as well as an area where meadow cover has been highly inconsistent over the same period (Zone L). In each zone, 30 cores were collected, covering a gradient of seagrass cover from low (SPC < 20%) to high (SPC > 80%). Each core was 20 cm deep to harvest seagrass leaves, rhizomes, and associated fauna.
-
-Only in Zone H, before coring, a hyperspectral signature of the sample was taken using an ASD Fieldspec HandHeld 2. The instrument was calibrated in the field for reflectance acquisition using a Spectralon with a 99% reflective Lambertian surface (No radiance measurment has been done).
-
-What has been done in each area ?
-
-Zone L : 
-  - Photo quadrat
-  - Coring
-  - Above and Bellow ground biomass (Dry weight)
-  - Bivalves Diversity and Density
-  - Sediment Sampling
-
-Zone H : 
-  - Photo quadrat
-  - Coring
-  - Above and Bellow ground biomass (Dry weight)
-  - Bivalves Diversity and Density
-  - Carbon Estimation
-  - Hyperspectral measurments
-  - Sediment Sampling
+The summer field campaign in Bourgneuf Bay took place on September 11th,
+2025, at the Barbâtre meadow. Low tide occurred at 14:20 local time,
+with a tidal range of 4.75 m. We arrived on site around 11:00. Two
+distinct sampling areas were selected based on the historical
+consistency of meadow density over the past 40 years. One area, where
+the meadow has consistently shown more than 50% seagrass cover every
+year for the last 40 years, was selected (Zone H), as well as an area
+where meadow cover has been highly inconsistent over the same period
+(Zone L). In each zone, 30 cores were collected, covering a gradient of
+seagrass cover from low (SPC \< 20%) to high (SPC \> 80%). Each core was
+20 cm deep to harvest seagrass leaves, rhizomes, and associated fauna.
 
 
+## What has been done in each area ?
+
+**Zone L :**
+
+-   Photo quadrat
+
+-   Coring
+
+-   Above and Bellow ground biomass (Dry weight)
+
+-   Bivalves Diversity and Density
+
+-   Sediment Sampling
+
+**Zone H :**
+
+-   Photo quadrat
+
+-   Coring
+
+-   Above and Bellow ground biomass (Dry weight)
+
+-   Bivalves Diversity and Density
+
+-   Carbon Estimation
+
+-   Hyperspectral measurments
+
+-   Sediment Sampling
 
 # Above Ground vs Below Ground biomass
+
+```{r image patchwork}
+#| echo: false
+#| error: false
+#| message: false
+#| warning: false
+#| eval: false
+
+# install.packages(c("magick", "tidyverse"))  # if needed
+library(magick)
+library(tidyverse)
+
+library(magick)
+library(tidyverse)
+
+make_image_grid_tidy <- function(
+  img_paths,
+  ncol = 10,
+  cell_size = 320,
+  font_size = 50,
+  outfile  = "grid.png",
+  pad = 10,
+  bg = "white",
+  label_color = "white",
+  label_box   = "#00000080",
+  letterbox = FALSE
+) {
+  stopifnot(length(img_paths) > 0)
+
+  # helper: square & label one image
+  square_and_label <- function(path, name) {
+    img <- image_read(path)
+    img <- if (letterbox) {
+      img |>
+        image_resize(paste0(cell_size, "x", cell_size)) |>
+        image_extent(paste0(cell_size, "x", cell_size),
+                     gravity = "center", color = bg)
+    } else {
+      img |>
+        image_resize(paste0(cell_size, "x", cell_size, "^")) |>
+        image_crop(paste0(cell_size, "x", cell_size, "+0+0"))
+    }
+    image_annotate(
+      img, text = name, gravity = "southeast",
+      size = font_size, color = label_color, boxcolor = label_box,
+      location = paste0("+", pad, "+", pad)
+    )
+  }
+
+  # tiles
+  tiles_tbl <- tibble(path = img_paths) |>
+    mutate(name = basename(path),
+           img  = map2(path, name, square_and_label))
+
+  # pad to complete last row
+  n <- nrow(tiles_tbl)
+  nrow_g <- ceiling(n / ncol)
+  total  <- nrow_g * ncol
+  if (total > n) {
+    blanks <- tibble(
+      path = NA_character_,
+      name = "",
+      img  = map(seq_len(total - n), ~ image_blank(cell_size, cell_size, color = bg))
+    )
+    tiles_tbl <- bind_rows(tiles_tbl, blanks)
+  }
+
+  # row/col indices
+  tiles_tbl <- tiles_tbl |>
+    mutate(idx = row_number(),
+           row = ceiling(idx / ncol),
+           col = ((idx - 1) %% ncol) + 1) |>
+    arrange(row, col)
+
+  # build each row (horizontally), then stack rows (vertically)
+  row_imgs <- tiles_tbl |>
+    group_split(row, keep = FALSE) |>
+    map(~ {
+      imgs <- .x$img
+      image_append(image_join(imgs), stack = FALSE)
+    })
+
+  final <- image_append(image_join(row_imgs), stack = TRUE)
+
+  image_write(final, path = outfile)
+  message("Wrote: ", normalizePath(outfile))
+  invisible(outfile)
+}
+
+files <- list.files("data/imgs", pattern = "\\.(jpe?g|tif?f)$", full.names = TRUE)
+make_image_grid_tidy(files, ncol = 10, cell_size = 800, outfile = "data/imgs/grid.png")
+
+```
+
+```{r image patchwork}
+#| echo: false
+#| error: false
+#| message: false
+#| warning: false
+#| fig-width: 10
+#| fig-height: 10
+#| out-width: "95%"
+#| label: fig-images
+#| fig-cap: Patchwork of the 60 photo-quadrat corresponding to the 60 cores performed during the Rewrite field campaign of Bourgneuf Bay
+
+knitr::include_graphics("data/imgs/grid.png")
+```
 
 ```{r Plot above vs below}
 #| label: fig-Above_Below
@@ -58,6 +187,8 @@ dryweight <- readxl::read_xlsx("data/DryWeight_Cores.xlsx") %>%
   mutate(A = A*correction_factor,
          B = B*correction_factor, 
          Area = substr(Station,1,1))### Convert the dryweight to be in g/m²
+
+lm<- lm(dryweight$B ~ dryweight$A)$coefficients
 
 p <- ggplot(
   dryweight,
@@ -107,12 +238,26 @@ girafe(
 
 ```
 
+The relationship between the below ground and above ground biomass of
+*Zostera noltei* in Bourgneuf Bay can be describe as follow:
+
+$$
+Below_{Ground} = 0.64 * Above_{Ground} + 10.04
+$$
+
+Site L and Site H have a similar relationship between those two variables (@fig-Above_Below).
 
 # Hyperspectral signature zone H
 
-```{r Plot NDVI dryweight}
+Only in Zone H, before coring, a hyperspectral signature of the sample
+was taken using an ASD Fieldspec HandHeld 2. The instrument was
+calibrated in the field for reflectance acquisition using a Spectralon
+with a 99% reflective Lambertian surface (No radiance measurement has
+been done, @fig-hyperspectral).
+
+```{r Hyperspectral signature}
 #| label: fig-hyperspectral
-#| fig-cap: Relationship between the NDVI and the Dryweight of seagrasses measured in area H 
+#| fig-cap: Hyperspectrale signature of each core of the Area H. Left plot show the raw reflectance signature while the right plot shows the min-max standardised signatures. 
 #| echo: false
 #| error: false
 #| message: false
@@ -121,18 +266,8 @@ girafe(
 
 library(ggplot2)
 library(ggiraph)
-library(dplyr)
 library(scales)
-library(tidyverse)
-
-wl_red <- 670 ### Red Wavelength for NDVI computation
-wl_nir <- 800 ### IR wavelength for NDVi computation
-
-Core_Diameter <- 15 ### diameter of the core used for sampling (in cm)
-
-core_area <- pi*((Core_Diameter/2)^2) #### Area of the core
-
-correction_factor <- (100*100)/core_area #### Correction factor to convert the dry weight to g/m²
+library(dplyr)
 
 df_sp <- read.delim("data/spectra/20250911_Bourgneuf_H_stations_reflectance.txt") %>% 
   pivot_longer(-Wavelength, names_to = "spectra", values_to = "ref") %>% 
@@ -141,67 +276,50 @@ df_sp <- read.delim("data/spectra/20250911_Bourgneuf_H_stations_reflectance.txt"
   reframe(ref_mean = mean(ref, na.rm = T),
           sd = sd(ref)) %>% 
   ungroup() %>% 
-  mutate(spectra = gsub("H","H_",spectra))
+  mutate(spectra = gsub("H","H_",spectra)) %>% 
+  dplyr::filter(Wavelength > 400,
+                Wavelength < 900) %>% 
+  group_by(spectra) %>% 
+  mutate(ref_std = (ref_mean - min(ref_mean))/(max(ref_mean)-min(ref_mean))) %>% 
+  dplyr::select(-sd) %>% 
+  pivot_longer(c(ref_mean,ref_std), names_to = "Proc",values_to = "value") %>% 
+  ungroup() %>% 
+  mutate(Proc = case_when(Proc == "ref_mean" ~ "Raw",
+                          T ~ "Standardised"))
 
 
-#### NDVI
-ndvi <- df_sp %>%             
+# df_sp already created above
+
+# make spectra a nicely ordered factor (optional)
+df_sp <- df_sp %>%
   arrange(spectra, Wavelength) %>%
-  group_by(spectra) %>%
-  summarise(
-    red = approx(Wavelength, ref_mean, xout = wl_red, rule = 2)$y,
-    nir = approx(Wavelength, ref_mean, xout = wl_nir, rule = 2)$y,
-    NDVI = (nir - red) / (nir + red),
-    .groups = "drop"
-  )
-
-dryweight <- readxl::read_xlsx("data/DryWeight_Cores.xlsx") %>% 
-  mutate(A = A*correction_factor,
-         B = B*correction_factor) ### Convert the dryweight to be in g/m²
-
-ndvi_dryweight <- ndvi %>% 
- left_join(dryweight, by = c("spectra" = "Station"))
-
-ndvi_long <- ndvi_dryweight %>%
-  pivot_longer(cols = c(A, B), names_to = "Compartment", values_to = "DryWeight") %>%
-  mutate(Compartment = recode(Compartment,
-                              A = "Above Ground",
-                              B = "Below Ground"))
-
+  mutate(spectra = factor(spectra, levels = sort(unique(spectra))))
 
 p <- ggplot(
-  ndvi_long,
-  aes(x = DryWeight, y = NDVI, color = Compartment, fill = Compartment)
+  df_sp,
+  aes(x = Wavelength, y = value, color = spectra, group = spectra)
 ) +
-  geom_smooth(method = "lm", se = TRUE, alpha = 0.1, linewidth = 1) +
-  geom_point_interactive(
-    aes(
-      tooltip = paste0(
-        "Sample: ", spectra, "\n",
-        "Dry Weight: ", number(DryWeight, accuracy = 0.01), " g/m²\n",
-        "NDVI: ", number(NDVI, accuracy = 0.001), "\n",
-        "Compartment: ", Compartment
-      )
-    ),
-    alpha = 0.7, size = 2
+  facet_wrap(~Proc, scales = "free")+
+  # interactive line: tooltip shows spectra; data_id enables hover styling
+  geom_line_interactive(
+    aes(tooltip = paste0("Spectra: ", spectra),
+        data_id  = spectra),
+    linewidth = 0.9, alpha = 0.9, show.legend = F
   ) +
-  scale_color_brewer(palette = "Set1") +
-  scale_fill_brewer(palette = "Set1") +
+  scale_color_viridis_d(option = "viridis", end = 0.95) +
+  scale_y_continuous(labels = label_percent(accuracy = 1)) +
   labs(
-    x = "Dry Weight (g/m²)",
-    y = "NDVI",
-    color = "Compartment",
-    fill  = "Compartment"
+    x = "Wavelength (nm)",
+    y = "Reflectance",
+    color = "Spectra"
   ) +
   theme_minimal(base_size = 14) +
   theme(
-    legend.position = c(0.02, 0.98),            # << inside the panel
-    legend.justification = c(0, 1),
-    legend.background = element_rect(fill = scales::alpha("white", 0.6), color = "grey80"),
-    legend.title = element_text(size = 13),
-    legend.text  = element_text(size = 12),
-    axis.title   = element_text(size = 14, face = "bold"),
-    axis.text    = element_text(size = 12),
+    legend.position = "top",
+    legend.title = element_text(size = 12),
+    legend.text  = element_text(size = 11),
+    axis.title   = element_text(size = 13, face = "bold"),
+    axis.text    = element_text(size = 11),
     panel.grid.minor = element_blank()
   )
 
@@ -209,14 +327,257 @@ girafe(
   ggobj = p,
   width_svg = 7, height_svg = 5,
   options = list(
-    opts_tooltip(opacity = .95),
-    opts_hover(css = "r:4pt; stroke-width: 2;")
+    # thicken the line you hover, fade others
+    opts_hover(css = "stroke-width:2.5px;"),
+    opts_hover_inv(css = "opacity:0.25;"),
+    # nicer tooltip
+    opts_tooltip(opacity = .95, css = "padding:6px; font-size:12px;")
   )
 )
 
 ```
 
+```{r find the index the most linked with above ground biomass}
+#| echo: false
+#| error: false
+#| message: false
+#| warning: false
+#| eval: false
 
+library(dplyr)
+library(tidyr)
+library(purrr)
+library(broom)
+
+# ---- Step 1: Define helper for index calculation ----
+compute_indices <- function(df, 
+                            wl_red = 670, wl_nir = 800, 
+                            wl_blue = 450, wl_green = 550, 
+                            wl_rededge = 705, wl_445 = 445, wl_750 = 750) {
+  
+  # interpolate reflectances
+  red   <- approx(df$Wavelength, df$ref_mean, xout = wl_red)$y
+  nir   <- approx(df$Wavelength, df$ref_mean, xout = wl_nir)$y
+  blue  <- approx(df$Wavelength, df$ref_mean, xout = wl_blue)$y
+  green <- approx(df$Wavelength, df$ref_mean, xout = wl_green)$y
+  re    <- approx(df$Wavelength, df$ref_mean, xout = wl_rededge)$y
+  r445  <- approx(df$Wavelength, df$ref_mean, xout = wl_445)$y
+  r750  <- approx(df$Wavelength, df$ref_mean, xout = wl_750)$y
+  
+  tibble(
+    # Classic indices
+    NDVI   = (nir - red) / (nir + red),
+    SR     = nir / red,
+    MSR    = (nir/red - 1) / sqrt(nir/red + 1),
+    DVI    = nir - red,
+    RVI    = red / nir,
+    
+    # Soil/structure corrected
+    SAVI   = 1.5 * (nir - red) / (nir + red + 0.5),
+    OSAVI  = 1.16 * (nir - red) / (nir + red + 0.16),
+    TSAVI  = (0.08 * (nir - 0.5*red - 0.08)) / (red + 0.5*nir + 0.08),
+    
+    # Atmosphere resistant
+    EVI    = 2.5 * (nir - red) / (nir + 6*red - 7.5*blue + 1),
+    EVI2   = 2.5 * (nir - red) / (nir + 2.4*red + 1),
+    
+    # Greenness indices
+    GNDVI  = (nir - green) / (nir + green),
+    VARI   = (green - red) / (green + red - blue),
+    CIG    = (nir / green) - 1,   # chlorophyll index green
+    CIRE   = (nir / re) - 1,      # chlorophyll index red edge
+    
+    # Red edge indices
+    NDRE   = (nir - re) / (nir + re),
+    
+    # Other spectral indices
+    MTVI2  = (1.5 * (1.2*(nir - green) - 2.5*(red - green))) / sqrt((2*nir + 1)^2 - (6*nir - 5*sqrt(red)) - 0.5),
+    MCARI  = ((re - red) - 0.2*(re - green)) * (re/red),
+    
+    # Pigment indices
+    PRI    = (green - re) / (green + re),
+    SIPI   = (nir - blue) / (nir - red),
+    
+    # Simple phenology-related
+    NDWI   = (nir - green) / (nir + green),   # often used for water content
+    ARVI   = (nir - (2*red - blue)) / (nir + (2*red - blue)),
+    
+    # --- New index ---
+    mND705 = (r750 - re) / (r750 + re - 2 * r445)
+  )
+}
+
+
+
+# ---- Step 2: Apply to each spectrum ----
+# Suppose `spectra_df` has columns: Spectra, Wavelength, Reflectance
+# and `biomass_df` has columns: Spectra, A (above-ground biomass)
+
+indices_df <- df_sp %>%
+  group_by(spectra) %>%
+  group_modify(~ compute_indices(.x)) %>%
+  ungroup()
+
+# ---- Step 3: Join with biomass ----
+data_all <- indices_df %>%
+  left_join(dryweight, by = c("spectra" = "Station"))
+
+
+# ---- Step 4: Correlate each index with biomass ----
+results <- data_all %>%
+  pivot_longer(cols = -c(spectra,A,B), names_to = "Index", values_to = "Value") %>%
+  group_by(Index) %>%
+  summarise(
+    model = list(lm((A) ~ Value, data = cur_data())),
+    .groups = "drop"
+  ) %>%
+  mutate(
+    glance = map(model, broom::glance)
+  ) %>%
+  unnest(glance) %>%
+  arrange(desc(r.squared)) %>%
+  select(Index, r.squared, adj.r.squared, p.value)
+
+print(results)
+
+
+```
+
+From those spectral signatures, a range of spectral indices were tested to identify the one with the strongest relationship to above-ground biomass. All the indices listed below were evaluated, but only the results for the best-performing index and the NDVI are shown.
+
+```{=latex}
+\begin{align}
+\text{NDVI}   &= \frac{R_{NIR} - R_{Red}}{R_{NIR} + R_{Red}} \\[6pt]
+\text{SR}     &= \frac{R_{NIR}}{R_{Red}} \\[6pt]
+\text{MSR}    &= \frac{\tfrac{R_{NIR}}{R_{Red}} - 1}{\sqrt{\tfrac{R_{NIR}}{R_{Red}} + 1}} \\[6pt]
+\text{DVI}    &= R_{NIR} - R_{Red} \\[6pt]
+\text{RVI}    &= \frac{R_{Red}}{R_{NIR}} \\[6pt]
+\text{SAVI}   &= \frac{1.5 \, (R_{NIR} - R_{Red})}{R_{NIR} + R_{Red} + 0.5} \\[6pt]
+\text{OSAVI}  &= \frac{1.16 \, (R_{NIR} - R_{Red})}{R_{NIR} + R_{Red} + 0.16} \\[6pt]
+\text{TSAVI}  &= \frac{0.08 \, (R_{NIR} - 0.5R_{Red} - 0.08)}{R_{Red} + 0.5R_{NIR} + 0.08} \\[6pt]
+\text{EVI}    &= \frac{2.5 \, (R_{NIR} - R_{Red})}{R_{NIR} + 6R_{Red} - 7.5R_{Blue} + 1} \\[6pt]
+\text{EVI2}   &= \frac{2.5 \, (R_{NIR} - R_{Red})}{R_{NIR} + 2.4R_{Red} + 1} \\[6pt]
+\text{GNDVI}  &= \frac{R_{NIR} - R_{Green}}{R_{NIR} + R_{Green}} \\[6pt]
+\text{VARI}   &= \frac{R_{Green} - R_{Red}}{R_{Green} + R_{Red} - R_{Blue}} \\[6pt]
+\text{CIG}    &= \frac{R_{NIR}}{R_{Green}} - 1 \\[6pt]
+\text{CIRE}   &= \frac{R_{NIR}}{R_{RE}} - 1 \\[6pt]
+\text{NDRE}   &= \frac{R_{NIR} - R_{RE}}{R_{NIR} + R_{RE}} \\[6pt]
+\text{MTVI2}  &= \frac{1.5 \, \left( 1.2(R_{NIR} - R_{Green}) - 2.5(R_{Red} - R_{Green}) \right)}{\sqrt{(2R_{NIR}+1)^2 - (6R_{NIR} - 5\sqrt{R_{Red}}) - 0.5}} \\[6pt]
+\text{MCARI}  &= \left[(R_{RE} - R_{Red}) - 0.2(R_{RE} - R_{Green})\right] \cdot \frac{R_{RE}}{R_{Red}} \\[6pt]
+\text{PRI}    &= \frac{R_{Green} - R_{RE}}{R_{Green} + R_{RE}} \\[6pt]
+\text{SIPI}   &= \frac{R_{NIR} - R_{Blue}}{R_{NIR} - R_{Red}} \\[6pt]
+\text{NDWI}   &= \frac{R_{NIR} - R_{Green}}{R_{NIR} + R_{Green}} \\[6pt]
+\text{ARVI}   &= \frac{R_{NIR} - (2R_{Red} - R_{Blue})}{R_{NIR} + (2R_{Red} - R_{Blue})} \\[6pt]
+\text{mND705} &= \frac{R_{750} - R_{705}}{R_{750} + R_{705} - 2R_{445}}
+\end{align}
+
+```
+
+```{r Plot NDVI dryweight}
+#| label: fig-hyperspectral_dryweight
+#| fig-cap: Relationship between the NDRE, the NDVI and the dry weight of seagrasses measured in area H 
+#| echo: false
+#| error: false
+#| message: false
+#| warning: false
+#| out-width: "95%"
+
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(ggiraph)
+library(scales)
+
+# --- wavelengths ---
+wl_red  <- 670   # NDVI red
+wl_nir  <- 750   # NDVI/NDRE NIR
+wl_re   <- 705   # red-edge for NDRE
+
+Core_Diameter <- 15
+core_area <- pi * ((Core_Diameter/2)^2)
+correction_factor <- (100*100)/core_area
+
+# --- spectra (as you had) ---
+df_sp <- read.delim("data/spectra/20250911_Bourgneuf_H_stations_reflectance.txt") %>% 
+  pivot_longer(-Wavelength, names_to = "spectra", values_to = "ref") %>% 
+  mutate(spectra = substr(spectra, 1, 3)) %>% 
+  group_by(Wavelength, spectra) %>% 
+  reframe(ref_mean = mean(ref, na.rm = TRUE),
+          sd = sd(ref)) %>% 
+  ungroup() %>% 
+  mutate(spectra = gsub("H","H_", spectra))
+
+# --- NDVI + NDRE per spectrum (linear interpolation to target λ) ---
+indices <- df_sp %>% 
+  arrange(spectra, Wavelength) %>%
+  group_by(spectra) %>%
+  summarise(
+    red = approx(Wavelength, ref_mean, xout = wl_red, rule = 2)$y,
+    re  = approx(Wavelength, ref_mean, xout = wl_re,  rule = 2)$y,
+    nir = approx(Wavelength, ref_mean, xout = wl_nir, rule = 2)$y,
+    NDVI = (nir - red) / (nir + red),
+    NDRE = (nir - re)  / (nir + re),
+    .groups = "drop"
+  )
+
+# --- biomass (convert to g/m²) ---
+dryweight <- readxl::read_xlsx("data/DryWeight_Cores.xlsx") %>% 
+  mutate(A = A * correction_factor,
+         B = B * correction_factor)
+
+# --- prepare data for plotting (Above-ground only) ---
+plot_df <- indices %>% 
+  left_join(dryweight, by = c("spectra" = "Station")) %>% 
+  transmute(
+    spectra,
+    Biomass = A,
+    NDVI, NDRE
+  ) %>% 
+  pivot_longer(c(NDVI, NDRE), names_to = "Index", values_to = "Value") %>% 
+  mutate(Index = factor(Index, levels = c("NDVI","NDRE"))) %>%
+  arrange(Index, Biomass)
+
+# --- interactive two-panel plot (NDVI left, NDRE right) ---
+p <- ggplot(
+  plot_df,
+  aes(x = Biomass, y = Value)
+) +
+  geom_smooth(method = "lm", se = TRUE, alpha = 0.12, linewidth = 1, color = "grey30") +
+  geom_point_interactive(
+    aes(
+      tooltip = paste0(
+        "Sample: ", spectra, "\n",
+        "Biomass: ", number(Biomass, accuracy = 0.01), " g/m²\n",
+        Index, ": ", number(Value, accuracy = 0.003)
+      ),
+      data_id = spectra
+    ),
+    size = 2, alpha = 0.8
+  ) +
+  facet_wrap(~ Index, ncol = 2) +   # NDVI (left) and NDRE (right)
+  labs(
+    x = "Above-ground biomass (g/m²)",
+    y = "Index value"
+  ) +
+  theme_minimal(base_size = 14) +
+  theme(
+    legend.position = "none",
+    strip.text = element_text(size = 13, face = "bold"),
+    axis.title = element_text(size = 14, face = "bold"),
+    panel.grid.minor = element_blank()
+  )
+
+girafe(
+  ggobj = p,
+  width_svg = 9, height_svg = 5,
+  options = list(
+    opts_tooltip(opacity = .95),
+    opts_hover(css = "r:4pt; stroke-width: 2;"),
+    opts_hover_inv(css = "opacity:0.25;")
+  )
+)
+
+```
 
 # Map
 
@@ -266,4 +627,3 @@ leaflet() %>%
 # htmlwidgets::saveWidget(plot_S2, file="maps/map_Bathy_Quiberon.html", selfcontained = F)
 
 ```
-
