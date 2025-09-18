@@ -8,7 +8,12 @@ editor:
     wrap: 72
 ---
 
+::: {style="text-align: center; margin-top: 20px;"}
+<button onclick="window.open(&#39;https://github.com/SigOiry/Fieldtrip_Rewrite_Sept2025/raw/refs/heads/main/Output/Data_REWRITE_Bourgneuf_bay.zip&#39;, &#39;_blank&#39;);" style="padding: 10px 20px; background-color: #4CAF50; color: white; border: none; border-radius: 5px; cursor: pointer;">
 
+Download all the data of that campaign
+</button>
+:::
 
 # Field trip organisation
 
@@ -179,8 +184,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
 ```
 
-The student have sorted the samples and seperated the above ground biomass of seagrass from the below ground biomass, as well as counting and identify bivalves. Once sorted out, leaves and rhizomes have been places  @fig-Above_Below shows the relationship between below ground and above ground biomass of all the 60 cores done in the field.  
-
+The samples were sorted to separate seagrass above-ground biomass (AGB) from below-ground biomass (BGB), and bivalves were counted and identified. After sorting, the leaf and rhizome fractions were dried for 48 h at 60 °C in a drying oven and then weighed on a precision balance to obtain dry mass for each core. @fig-Above_Below shows the relationship between BGB and AGB for all 60 cores collected in the field. 
 ```{r Plot above vs below}
 #| label: fig-Above_Below
 #| fig-cap: Relationship between the above and below ground biomass
@@ -257,8 +261,7 @@ girafe(
 
 ```
 
-The relationship between the below ground and above ground biomass of
-*Zostera noltei* in Bourgneuf Bay can be describe as follow:
+The relationship between the below ground and above ground biomass of *Zostera noltei* in Bourgneuf Bay can be describe as follow:
 
 $$
 Below_{Ground} = 0.64 * Above_{Ground} + 10.04
@@ -851,4 +854,26 @@ leaflet() %>%
 
 # htmlwidgets::saveWidget(plot_S2, file="maps/map_Bathy_Quiberon.html", selfcontained = F)
 
+```
+
+```{r zip outputs}
+#| echo: false
+#| message: false
+#| warning: false
+#| cache: false
+#| eval: true
+
+
+# ---- settings ----
+folder_to_zip <- "data"   # directory whose contents you want to archive
+zip_file      <- "Output/Data_REWRITE_Bourgneuf_bay.zip"
+
+# ---- create the zip ----
+# list all files (recursive = TRUE grabs sub-folders too; set FALSE if you only
+# want the top-level files)
+files <- list.files(folder_to_zip, recursive = TRUE, full.names = TRUE)
+
+# make sure you’re in the folder so the archive has relative paths, not full paths
+
+utils::zip(zipfile = zip_file, files = files)
 ```
