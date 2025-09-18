@@ -1,0 +1,14 @@
+ggplot2
+ggiraph
+dplyr
+scales
+tidyverse
+tibble
+tidyr
+readr
+purrr
+stringr
+forcats
+lubridate
+plotly
+exiftoolr

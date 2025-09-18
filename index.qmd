@@ -1,5 +1,5 @@
 ---
-title: "Rewrite_BourgneufBay_2025"
+title: "Field Campaign of Bourgneuf Bay 2025 - REWRITE"
 author: "Simon Oiry"
 editor_options: 
   chunk_output_type: console
@@ -7,6 +7,8 @@ editor:
   markdown: 
     wrap: 72
 ---
+
+
 
 # Field trip organisation
 
@@ -157,10 +159,27 @@ make_image_grid_tidy(files, ncol = 10, cell_size = 800, outfile = "data/imgs/gri
 #| fig-height: 10
 #| out-width: "95%"
 #| label: fig-images
-#| fig-cap: Patchwork of the 60 photo-quadrat corresponding to the 60 cores performed during the Rewrite field campaign of Bourgneuf Bay
+#| fig-cap: Patchwork of the 60 photo-quadrat corresponding to the 60 cores performed during the Rewrite field campaign of Bourgneuf Bay. From top-left to bottom right H_01 to H_30 followed by L_01 to L_30.
 
-knitr::include_graphics("data/imgs/grid.png")
+htmltools::HTML('
+<figure>
+  <img id="gridimg" src="data/imgs/grid.png" alt="Patchwork of the 60 photo-quadrats" style="max-width:95%; cursor:grab; touch-action:none;" />
+</figure>
+
+<link rel="preload" as="script" href="https://cdn.jsdelivr.net/npm/@panzoom/panzoom/dist/panzoom.min.js">
+<script src="https://cdn.jsdelivr.net/npm/@panzoom/panzoom/dist/panzoom.min.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  const el = document.getElementById("gridimg");
+  const pz = Panzoom(el, { maxScale: 8, contain: "outside" });
+  el.parentElement.addEventListener("wheel", pz.zoomWithWheel);
+});
+</script>
+')
+
 ```
+
+The student have sorted the samples and seperated the above ground biomass of seagrass from the below ground biomass, as well as counting and identify bivalves. Once sorted out, leaves and rhizomes have been places  @fig-Above_Below shows the relationship between below ground and above ground biomass of all the 60 cores done in the field.  
 
 ```{r Plot above vs below}
 #| label: fig-Above_Below
@@ -253,7 +272,7 @@ Only in Zone H, before coring, a hyperspectral signature of the sample
 was taken using an ASD Fieldspec HandHeld 2. The instrument was
 calibrated in the field for reflectance acquisition using a Spectralon
 with a 99% reflective Lambertian surface (No radiance measurement has
-been done, @fig-hyperspectral).
+been done).
 
 ```{r Hyperspectral signature}
 #| label: fig-hyperspectral
@@ -268,6 +287,8 @@ library(ggplot2)
 library(ggiraph)
 library(scales)
 library(dplyr)
+library(tidyverse)
+library(plotly)
 
 df_sp <- read.delim("data/spectra/20250911_Bourgneuf_H_stations_reflectance.txt") %>% 
   pivot_longer(-Wavelength, names_to = "spectra", values_to = "ref") %>% 
@@ -337,6 +358,199 @@ girafe(
 
 ```
 
+@fig-hyperspectral shows the hyperspectral signature of all the cores of the area H. Spectra are showing differente level of reflectance, with core H_04 having a relatively strong overall reflectance, with an small absorption peak around 665 nm due to the presence of chlorophyll-a. On the other hand the spectra H_30 is showing a lower overall reflectance, with really low reflectance in the visible and a strong absorption peak of chlorophyll-a around 665nm.
+
+## About the reflectance anomaly around 760 nm. 
+
+An unexpected reflectance feature can be observed around 761 nm in most of the spectra (@fig-hyperspectral). This feature appears as a positive anomaly in some cases, such as H_04 or H_03, or as a negative anomaly, as in H_02 or H_19. The most likely explanation is an instrumental artifact, for example related to calibration issues of the ASD spectroradiometer. Nevertheless, it is worth noting that at 761 nm vegetation can also produce a narrow reflectance peak due to sunlight-induced chlorophyll fluorescence (SIF). This fluorescence signal arises from the broad chlorophyll a emission around 740 nm that partly fills the atmospheric O₂ absorption band, and has been documented both in terrestrial and aquatic vegetation ([Lu et al. 2016](https://doi.org/10.1002/2016JC011797), [Meroni & Colombo, 2006](https://doi.org/10.1016/j.rse.2006.03.016)). 
+
+To investigate the origin of this feature, the Fluorescence Line Height (FLH;[Lu et al. 2016](https://doi.org/10.1002/2016JC011797)) will be calculated. 
+
+$$
+\mathrm{FLH}(761)
+= R_{rs}(761)
+- \left[
+\frac{769-761}{769-757}
+\big(R_{rs}(757)-R_{rs}(769)\big)
++ R_{rs}(769)
+\right]
+$$
+
+The FLH values will be compared with NDVI, as proxy of the biomass, with the green leaf index proxy of the greeness of seagrass leaves as well as with the amount of time the ASD had been operating at the moment of spectrum acquisition.
+
+@fig-LH_Index is showing the ralationship between the FLH, measuring the height of the peak visible at 761 nm, and the NDVI and the GLI. No relationship between the size of the anomaly and those radiometric indices can been seen from the data acquired on site H. No matter the biomass, and no matter the greenness of leaves, the peak at 761 nm can be more or less pronounced.
+
+```{r LH vs NDVI}
+#| label: fig-LH_Index
+#| fig-cap: Relationship between the Fluorescence Line Height (FLH) and radiometric indices. The Normalised difference vegetation index is a proxy of the biomass while the Green Leaf Index is a proxy of leaves greenness. 
+#| echo: false
+#| error: false
+#| message: false
+#| warning: false
+#| out-width: "95%"
+
+library(dplyr)
+library(purrr)
+
+df_sp <- read.delim("data/spectra/20250911_Bourgneuf_H_stations_reflectance.txt") %>% 
+  pivot_longer(-Wavelength, names_to = "spectra", values_to = "ref") %>% 
+  mutate(spectra = substr(spectra, 1,3)) %>% 
+  group_by(Wavelength, spectra) %>% 
+  reframe(ref_mean = mean(ref, na.rm = T),
+          sd = sd(ref)) 
+
+
+# --- Target wavelengths ---
+l1 <- 757; l2 <- 761; l3 <- 769
+wl_red <- 670; wl_nir <- 800
+wl_green <- 550; wl_blue <- 450
+
+# --- Indices per spectrum (with linear interpolation) ---
+indices <- df_sp %>% 
+  arrange(spectra, Wavelength) %>%
+  group_by(spectra) %>%
+  summarise(
+    R757  = approx(Wavelength, ref_mean, xout = l1,      rule = 2)$y,
+    R761  = approx(Wavelength, ref_mean, xout = l2,      rule = 2)$y,
+    R769  = approx(Wavelength, ref_mean, xout = l3,      rule = 2)$y,
+    Rred  = approx(Wavelength, ref_mean, xout = wl_red,  rule = 2)$y,
+    Rnir  = approx(Wavelength, ref_mean, xout = wl_nir,  rule = 2)$y,
+    Rgrn  = approx(Wavelength, ref_mean, xout = wl_green,rule = 2)$y,
+    Rblue = approx(Wavelength, ref_mean, xout = wl_blue, rule = 2)$y,
+    .groups = "drop"
+  ) %>%
+  mutate(
+    # FLH at 761 nm
+    FLH  = R761 - ( ((l3 - l2) / (l3 - l1)) * (R757 - R769) + R769 ),
+    # NDVI (NIR 800 / Red 670)
+    NDVI = (Rnir - Rred) / (Rnir + Rred),
+    # GLI (Green Leaf Index)
+    GLI  = (2*Rgrn - Rred - Rblue) / (2*Rgrn + Rred + Rblue)
+  )
+
+# --- Long form for faceting: NDVI vs FLH and GLI vs FLH ---
+plot_df <- indices %>%
+  select(spectra, FLH, NDVI, GLI) %>%
+  tidyr::pivot_longer(c(NDVI, GLI), names_to = "Index", values_to = "Value") %>%
+  mutate(Index = factor(Index, levels = c("NDVI","GLI"))) %>%
+  arrange(Index, FLH)
+
+# --- Interactive, facetted plot ---
+p <- ggplot(plot_df, aes(x = FLH, y = Value)) +
+  geom_smooth(method = "lm", formula = y ~ x, se = TRUE, linewidth = 1, color = "grey30") +
+  geom_point_interactive(
+    aes(
+      tooltip = paste0(
+        "Sample: ", spectra, "\n",
+        "FLH: ", number(FLH, accuracy = 0.00001), "\n",
+        Index, ": ", number(Value, accuracy = 0.003)
+      ),
+      data_id = spectra
+    ),
+    size = 2.4, alpha = 0.85
+  ) +
+  facet_wrap(~ Index, ncol = 2, scales = "free") +
+  labs(
+    title = "Relationships of NDVI and GLI with FLH",
+    x = "FLH",
+    y = "Index value"
+  ) +
+  theme_minimal(base_size = 14) +
+  theme(
+    legend.position = "none",
+    strip.text = element_text(size = 13, face = "bold"),
+    axis.title = element_text(size = 13, face = "bold"),
+    panel.grid.minor = element_blank()
+  )
+
+girafe(
+  ggobj = p,
+  width_svg = 9, height_svg = 5,
+  options = list(
+    opts_tooltip(css = "background:rgba(0,0,0,.9); color:#fff; padding:6px 8px; border-radius:4px;"),
+    opts_hover(css = "r:4pt; stroke:#222; stroke-width:1.5px;"),
+    opts_hover_inv(css = "opacity:0.25;")
+  )
+)
+```
+
+To estimate, for each spectrum, how long the instrument had been running at the time of acquisition, we extracted the capture time of the corresponding photo-quadrat from the images’ EXIF metadata. Because the photo-quadrats were taken a few minutes before the hyperspectral measurements, their timestamps provide a close proxy for the acquisition time; aligning these timestamps with the instrument start time yields the elapsed operating time for each spectrum. Sample H_01 was acquired first. By convention, we set its instrument run time to 0 (min), and the run time for all subsequent samples is expressed relative to H_01—that is, as the difference between each sample’s acquisition timestamp and that of H_01.
+
+```{r Running_Time vs FLH}
+#| label: fig-LH_runningtime
+#| fig-cap: Relationship between the Fluorescence Line Height (FLH) and the amount of time the ASD Specfield Handheld 2 has been running. 
+#| echo: false
+#| error: false
+#| message: false
+#| warning: false
+#| cache: true
+#| out-width: "95%"
+
+library(exiftoolr)
+library(tidyverse)
+
+files <- list.files("data/imgs/RAW_H", pattern = "\\.(jpe?g|tif?f)$", full.names = TRUE)
+
+j <- exif_read(files[1])$ModifyDate
+
+
+df_acquisition <- map_df(files, function(f) {
+  x <- exif_read(f, tags = "ModifyDate")
+  tibble(
+    file               = f,
+    AcquisitionDate    = x$ModifyDate
+  )
+}) %>% 
+  mutate(AcquisitionDate = as.POSIXct(AcquisitionDate, format = "%Y:%m:%d %H:%M:%OS"),
+         filename = gsub(".*/","",file),
+         sample = substr(filename,1,4))
+
+initial_date <- df_acquisition %>% 
+  dplyr::filter(sample == "H_01") %>% 
+  pull(AcquisitionDate)
+
+df_acquisition <- df_acquisition %>% 
+  mutate(running_time = AcquisitionDate - initial_date) %>% 
+  left_join(indices %>%
+              select(spectra, FLH, NDVI, GLI) %>% 
+              mutate(spectra = gsub("H","H_",spectra)), by = c("sample" = "spectra"))
+
+p <- ggplot(df_acquisition, aes(x = running_time, y = FLH)) +
+  geom_smooth(method = "lm", formula = y ~ x, se = TRUE, linewidth = 1, color = "grey30") +
+  geom_point_interactive(
+    aes(tooltip = sample, data_id = sample),
+    size = 2.6, alpha = 0.85
+  ) +
+  labs(
+    title = "FLH vs. instrument running time",
+    x = "Instrument running time (seconds)",
+    y = "FLH"
+  ) +
+  ylim(c(-0.004,0.008))+
+  theme_minimal(base_size = 14) +
+  theme(
+    legend.position = "none",
+    strip.text = element_text(size = 13, face = "bold"),
+    axis.title = element_text(size = 13, face = "bold"),
+    panel.grid.minor = element_blank()
+  )
+
+girafe(
+  ggobj = p,
+  width_svg = 9, height_svg = 5,
+  options = list(
+    opts_tooltip(css = "background:rgba(0,0,0,.9); color:#fff; padding:6px 8px; border-radius:4px;"),
+    opts_hover(css = "r:4pt; stroke:#222; stroke-width:1.5px;"),
+    opts_hover_inv(css = "opacity:0.25;")
+  )
+)
+
+```
+
+@fig-LH_runningtime shows the relationship between ASD run time and the fluorescence line height at 761 nm (FLH). Sample H_01 was acquired immediately after startup (T0), and the last sample in the sequence, H_08, was collected 7,316 s (≈ 122 min) after T0. A negative linear trend can be seen (grey 95% CI shown): FLH values are highest at the beginning of the session and decline as the instrument continues to run, with several late measurements approaching zero or slightly negative values.
+
+## Radiometric indices vs Biomass
+
 ```{r find the index the most linked with above ground biomass}
 #| echo: false
 #| error: false
@@ -349,6 +563,14 @@ library(tidyr)
 library(purrr)
 library(broom)
 
+
+Core_Diameter <- 15
+core_area <- pi * ((Core_Diameter/2)^2)
+correction_factor <- (100*100)/core_area
+
+dryweight <- readxl::read_xlsx("data/DryWeight_Cores.xlsx") %>% 
+  mutate(A = A * correction_factor,
+         B = B * correction_factor)
 # ---- Step 1: Define helper for index calculation ----
 compute_indices <- function(df, 
                             wl_red = 670, wl_nir = 800, 
@@ -420,6 +642,7 @@ indices_df <- df_sp %>%
 
 # ---- Step 3: Join with biomass ----
 data_all <- indices_df %>%
+  mutate(spectra = gsub("H","H_",spectra)) %>% 
   left_join(dryweight, by = c("spectra" = "Station"))
 
 
@@ -443,35 +666,37 @@ print(results)
 
 ```
 
-From those spectral signatures, a range of spectral indices were tested to identify the one with the strongest relationship to above-ground biomass. All the indices listed below were evaluated, but only the results for the best-performing index and the NDVI are shown.
+From those spectral signatures, a range of spectral indices were tested to identify the one with the strongest relationship to above-ground biomass. All the indices listed below were evaluated, but only the results for the best-performing index and the NDVI are shown. 
 
-```{=latex}
-\begin{align}
-\text{NDVI}   &= \frac{R_{NIR} - R_{Red}}{R_{NIR} + R_{Red}} \\[6pt]
-\text{SR}     &= \frac{R_{NIR}}{R_{Red}} \\[6pt]
-\text{MSR}    &= \frac{\tfrac{R_{NIR}}{R_{Red}} - 1}{\sqrt{\tfrac{R_{NIR}}{R_{Red}} + 1}} \\[6pt]
-\text{DVI}    &= R_{NIR} - R_{Red} \\[6pt]
-\text{RVI}    &= \frac{R_{Red}}{R_{NIR}} \\[6pt]
-\text{SAVI}   &= \frac{1.5 \, (R_{NIR} - R_{Red})}{R_{NIR} + R_{Red} + 0.5} \\[6pt]
-\text{OSAVI}  &= \frac{1.16 \, (R_{NIR} - R_{Red})}{R_{NIR} + R_{Red} + 0.16} \\[6pt]
-\text{TSAVI}  &= \frac{0.08 \, (R_{NIR} - 0.5R_{Red} - 0.08)}{R_{Red} + 0.5R_{NIR} + 0.08} \\[6pt]
-\text{EVI}    &= \frac{2.5 \, (R_{NIR} - R_{Red})}{R_{NIR} + 6R_{Red} - 7.5R_{Blue} + 1} \\[6pt]
-\text{EVI2}   &= \frac{2.5 \, (R_{NIR} - R_{Red})}{R_{NIR} + 2.4R_{Red} + 1} \\[6pt]
+$$
+\begin{aligned}
+\text{NDVI}   &= \frac{R_{NIR} - R_{Red}}{R_{NIR} + R_{Red}}       &\quad
 \text{GNDVI}  &= \frac{R_{NIR} - R_{Green}}{R_{NIR} + R_{Green}} \\[6pt]
+\text{SR}     &= \frac{R_{NIR}}{R_{Red}}                           &\quad
 \text{VARI}   &= \frac{R_{Green} - R_{Red}}{R_{Green} + R_{Red} - R_{Blue}} \\[6pt]
+\text{MSR}    &= \frac{\tfrac{R_{NIR}}{R_{Red}} - 1}{\sqrt{\tfrac{R_{NIR}}{R_{Red}} + 1}} &\quad
 \text{CIG}    &= \frac{R_{NIR}}{R_{Green}} - 1 \\[6pt]
+\text{DVI}    &= R_{NIR} - R_{Red}                                  &\quad
 \text{CIRE}   &= \frac{R_{NIR}}{R_{RE}} - 1 \\[6pt]
+\text{RVI}    &= \frac{R_{Red}}{R_{NIR}}                            &\quad
 \text{NDRE}   &= \frac{R_{NIR} - R_{RE}}{R_{NIR} + R_{RE}} \\[6pt]
-\text{MTVI2}  &= \frac{1.5 \, \left( 1.2(R_{NIR} - R_{Green}) - 2.5(R_{Red} - R_{Green}) \right)}{\sqrt{(2R_{NIR}+1)^2 - (6R_{NIR} - 5\sqrt{R_{Red}}) - 0.5}} \\[6pt]
-\text{MCARI}  &= \left[(R_{RE} - R_{Red}) - 0.2(R_{RE} - R_{Green})\right] \cdot \frac{R_{RE}}{R_{Red}} \\[6pt]
+\text{SAVI}   &= \frac{1.5 \, (R_{NIR} - R_{Red})}{R_{NIR} + R_{Red} + 0.5} &\quad
+\text{MTVI2}  &= \frac{1.5 \left[ 1.2(R_{NIR} - R_{Green}) - 2.5(R_{Red} - R_{Green}) \right]}
+{\sqrt{(2R_{NIR}+1)^2 - (6R_{NIR} - 5\sqrt{R_{Red}}) - 0.5}} \\[6pt]
+\text{OSAVI}  &= \frac{1.16 \, (R_{NIR} - R_{Red})}{R_{NIR} + R_{Red} + 0.16} &\quad
+\text{MCARI}  &= \left[(R_{RE} - R_{Red}) - 0.2(R_{RE} - R_{Green})\right] \frac{R_{RE}}{R_{Red}} \\[6pt]
+\text{TSAVI}  &= \frac{0.08 \, (R_{NIR} - 0.5R_{Red} - 0.08)}{R_{Red} + 0.5R_{NIR} + 0.08} &\quad
 \text{PRI}    &= \frac{R_{Green} - R_{RE}}{R_{Green} + R_{RE}} \\[6pt]
+\text{EVI}    &= \frac{2.5 \, (R_{NIR} - R_{Red})}{R_{NIR} + 6R_{Red} - 7.5R_{Blue} + 1} &\quad
 \text{SIPI}   &= \frac{R_{NIR} - R_{Blue}}{R_{NIR} - R_{Red}} \\[6pt]
+\text{EVI2}   &= \frac{2.5 \, (R_{NIR} - R_{Red})}{R_{NIR} + 2.4R_{Red} + 1} &\quad
 \text{NDWI}   &= \frac{R_{NIR} - R_{Green}}{R_{NIR} + R_{Green}} \\[6pt]
-\text{ARVI}   &= \frac{R_{NIR} - (2R_{Red} - R_{Blue})}{R_{NIR} + (2R_{Red} - R_{Blue})} \\[6pt]
-\text{mND705} &= \frac{R_{750} - R_{705}}{R_{750} + R_{705} - 2R_{445}}
-\end{align}
+\text{mND705} &= \frac{R_{750} - R_{705}}{R_{750} + R_{705} - 2R_{445}} &\quad &
+\end{aligned}
+$$
 
-```
+The index with the highest R² against above-ground biomass is NDRE. NDRE is analogous to NDVI but replaces the red band (~665 nm) with a red-edge band (typically ~705 nm):
+The advantage is reduced saturation at high biomass. Around 665 nm, chlorophyll-a absorption quickly reaches an asymptote, so reflectance in the red band changes little as biomass increases and NDVI tends to plateau. In the red-edge region, however, reflectance remains sensitive: as biomass/chlorophyll increases, reflectance near ~705 nm continues to decrease (with a concomitant shift of the red-edge to longer wavelengths). Consequently, NDRE preserves sensitivity in dense canopies and correlates more strongly with biomass than NDVI, resulting with an R² square slightly higher than for the NDVI (R²_NDVI = 0.65, R²_NDRE = 0.67)... -_-'
 
 ```{r Plot NDVI dryweight}
 #| label: fig-hyperspectral_dryweight
@@ -579,13 +804,13 @@ girafe(
 
 ```
 
-# Map
 
 ```{r leafletmap}
 #| fig-cap: Map of Bourgneuf Bay Sampling site
 #| echo: false
 #| error: false
 #| message: false
+#| eval: false
 #| warning: false
 #| out-width: "95%"
 
