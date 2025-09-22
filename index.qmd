@@ -782,7 +782,7 @@ p <- ggplot(
     ),
     size = 2, alpha = 0.8
   ) +
-  facet_wrap(~ Index, ncol = 2) +   # NDVI (left) and NDRE (right)
+  facet_wrap(~ Index, ncol = 2, scales = "free") +   # NDVI (left) and NDRE (right)
   labs(
     x = "Above-ground biomass (g/m²)",
     y = "Index value"
@@ -856,6 +856,477 @@ leaflet() %>%
 
 ```
 
+# Bivalve diversity & spatial distribution
+
+The student quantified the density of all bivalve species present in the sediment while sorting each core, and all taxonomic identifications were subsequently verified by a taxonomist.
+
+```{r Bivalve analysis}
+#| label: fig-BivDensity
+#| fig-cap: Average density of each bivalve specie across all 60 cores (Left) and Percentage of core were each species were found (Right). 
+#| echo: false
+#| error: false
+#| message: false
+#| warning: false
+#| out-width: "95%"
+
+library(tidyverse)
+library(readxl)
+library(patchwork)
+
+Core_Diameter <- 15
+core_area <- pi * ((Core_Diameter/2)^2)
+correction_factor <- (100*100)/core_area
+
+df_bivalve <- read_xlsx("data/Abondance_bivalve_Bourgneuf_Bay_REWRITE_2025.xlsx") %>% 
+  mutate(Station = str_pad(Station, width = 2, pad = "0"),
+         Core = paste0(Site,"_",Station),
+         Density = Abondance * correction_factor) %>% 
+  dplyr::filter(Species != "Inconnu") %>% 
+  mutate(Species = gsub("Scobicularia plana","S. plana",Species),
+         Species = gsub("Ruditapes derussatus","R. decu.", Species),
+         Species = gsub("Cerastoderma edule","C. edule", Species),
+         Species = gsub("Loripes orbiculatus","L. orbi.", Species),
+         Species = gsub("Macoma balthica","M. balthica", Species),
+         Species = gsub("Abra tenuis","A. tenuis", Species),
+         Species = gsub("Mya arenaria","M. arenaria", Species),
+         Species = gsub("Ruditapes philippinarum","R. phili.", Species))
+
+density_by_specie_ci <- df_bivalve %>% 
+  group_by(Species) %>% 
+  summarise(
+    n = sum(!is.na(Density)),
+    mean_density = mean(Density, na.rm = TRUE),
+    sd = sd(Density, na.rm = TRUE),
+    .groups = "drop"
+  ) %>% 
+  mutate(
+    sd = if_else(is.na(sd), 0, sd),
+    se = sd / sqrt(pmax(n, 1)),
+    ci95 = qt(0.975, df = pmax(n - 1, 1)) * se
+  )
+
+species_levels <- density_by_specie_ci %>%
+  arrange(mean_density) %>%
+  pull(Species)
+
+# Rebuild your first plot as an object (p1) using fixed factor levels
+p1 <- ggplot(density_by_specie_ci,
+             aes(x = factor(Species, levels = species_levels), y = mean_density)) +
+  geom_col(width = 0.7, fill = "grey70") +
+  geom_errorbar(aes(ymin = mean_density - ci95, ymax = mean_density + ci95),
+                width = 0.2, linewidth = 0.6) +
+  coord_flip() +
+  labs(
+    title = "Average Density by Species (±95% CI)",
+    x = "Species",
+    y = "Mean Density (ind/m²)"
+  ) +
+  theme_minimal(base_size = 11) +
+  theme(
+    plot.title = element_text(face = "bold", hjust = 0.5),
+    axis.title.x = element_text(margin = margin(t = 8)),
+    axis.title.y = element_text(margin = margin(r = 8))
+  )
+
+# --- Presence (% of cores) per species ---
+total_cores <- dplyr::n_distinct(df_bivalve$Core)
+
+presence_by_specie <- df_bivalve %>%
+  filter(!is.na(Abondance), Abondance > 0) %>%         # presence if count > 0
+  group_by(Species) %>%
+  summarise(cores_present = n_distinct(Core), .groups = "drop") %>%
+  mutate(
+    percent_cores = 100 * cores_present / total_cores
+  )
+
+p2 <- ggplot(presence_by_specie,
+             aes(x = factor(Species, levels = species_levels),
+                 y = percent_cores)) +
+  geom_col(width = 0.7, fill = "grey70") +
+  coord_flip() +
+  labs(
+    title = "Occurrence",
+    x = NULL,
+    y = "Cores with species (%)"
+  ) +
+  scale_y_continuous(limits = c(0, 100),
+                     expand = expansion(mult = c(0, .05)),
+                     labels = function(x) paste0(x, "%")) +
+  theme_minimal(base_size = 11) +
+  theme(
+    plot.title = element_text(face = "bold", hjust = 0.5),
+    axis.title.y = element_blank()
+  )
+
+# --- Side-by-side with patchwork ---
+p1 + p2 + plot_layout(widths = c(2, 1))
+
+```
+
+@fig-BivDensity shows the mean density of each bivalve species across the 60 cores. In total, nine distinct species were identified. The most common was *Scrobicularia plana* (209 individuals per m², on average, present in about 77% of cores), whereas *Ruditapes decussatus* was the least common (0.95 individuals per m²,  present in about 1% of cores).
+
+
+## Bivalve diversity by core
+
+```{r Shannon index}
+#| label: fig-Biv_diversity
+#| fig-cap: Interactive lollipop charts of bivalve diversity per core (n = 60). For each core (colored by site), we show Shannon diversity (H′), species richness (S), and Pielou evenness (J′). Metrics were computed from species‐level counts; H′ uses natural logarithms and J′ = H′/ln(S). Lines run from 0 to the core’s value and points mark the estimate; cores with no identified bivalves appear with H′ = 0 and J′ = 0. Hover to see exact values. 
+#| echo: false
+#| error: false
+#| message: false
+#| warning: false
+#| out-width: "95%"
+
+
+library(dplyr)
+library(tidyr)
+library(vegan)
+library(ggplot2)
+library(ggiraph)
+library(scales)
+library(tidytext)  # for reorder_within / scale_y_reordered
+library(glue)
+library(brms)       # Bayesian models via Stan
+library(posterior) 
+
+Core_Diameter <- 15
+core_area <- pi * ((Core_Diameter/2)^2)
+correction_factor <- (100*100)/core_area
+
+df_bivalve <- read_xlsx("data/Abondance_bivalve_Bourgneuf_Bay_REWRITE_2025.xlsx") %>% 
+  mutate(Station = str_pad(Station, width = 2, pad = "0"),
+         Core = paste0(Site,"_",Station),
+         Density = Abondance * correction_factor) %>% 
+  dplyr::filter(Species != "Inconnu") %>% 
+  mutate(Species = gsub("Scobicularia","Scrobicularia",Species),
+         Species = gsub("derussatus","decussatus", Species))
+
+# --- Core/species universes ---
+cores   <- df_bivalve %>% distinct(Core, Site)  # one site per core expected
+species <- df_bivalve %>% distinct(Species)
+
+# sanity check: duplicated core->site?
+dup_cores <- cores %>% count(Core) %>% filter(n > 1)
+if (nrow(dup_cores) > 0) {
+  warning("Some cores map to multiple Sites; check 'cores' table.")
+}
+
+# --- Long community table with all Core x Species (zeros filled) ---
+comm_long <- df_bivalve %>%
+  group_by(Core, Species) %>%
+  summarise(Abund = sum(Abondance, na.rm = TRUE), .groups = "drop") %>%
+  complete(Core = cores$Core, Species = species$Species, fill = list(Abund = 0))
+
+# --- Wide matrix for vegan ---
+comm <- comm_long %>%
+  pivot_wider(names_from = Species, values_from = Abund, values_fill = 0) %>%
+  arrange(Core)
+
+mat <- as.matrix(comm[, -1, drop = FALSE])
+
+# --- Diversity metrics per core ---
+H <- vegan::diversity(mat, index = "shannon")      # may be NA for all-zero rows
+S <- vegan::specnumber(mat)
+J <- ifelse(S > 0, H / log(S), 0)
+N <- rowSums(mat)
+
+# replace NA H with 0 for empty cores
+H[is.na(H)] <- 0
+
+shannon_by_core <- tibble(
+  Core       = comm$Core,
+  Shannon_H  = as.numeric(H),
+  Richness_S = as.numeric(S),
+  Evenness_J = as.numeric(J),
+  N_total    = as.integer(N)
+) %>%
+  left_join(cores, by = "Core")  # safe: 1 row per Core
+
+# --- Long for plotting ---
+long <- shannon_by_core %>%
+  pivot_longer(c(Shannon_H, Richness_S, Evenness_J),
+               names_to = "metric", values_to = "value") %>%
+  mutate(
+    metric = recode(metric,
+      Shannon_H  = "Shannon H′",
+      Richness_S = "Richness S",
+      Evenness_J = "Evenness J′"
+    ),
+    tooltip = glue(
+      "<b>{Core}</b><br/>Site: {Site}<br/>{metric}: {round(value, 3)}<br/>",
+      "Total individuals: {N_total}"
+    ),
+    Core_ord = reorder_within(Core, value, metric),
+    data_id  = paste(Core, metric, sep = "::")   # unique per facet row
+  )
+
+# --- Interactive lollipop chart (one row per Core per metric) ---
+p <- ggplot(long, aes(x = value, y = Core  , color = Site)) +
+  geom_segment_interactive(
+    aes(x = 0, xend = value, yend = Core  , tooltip = tooltip, data_id = data_id),
+    linewidth = 0.6, alpha = 0.55
+  ) +
+  geom_point_interactive(
+    aes(tooltip = tooltip, data_id = data_id),
+    size = 3
+  ) +
+  facet_wrap(~ metric, scales = "free_x", ncol = 3) +
+  scale_y_reordered() +
+  labs(title = "Bivalve Diversity by Core (interactive)", x = NULL, y = "Core") +
+  theme_minimal(base_size = 13) +
+  theme(
+    plot.title = element_text(face = "bold", hjust = 0.5),
+    panel.grid.major.y = element_blank(),
+    legend.position = "top"
+  )
+
+girafe(
+  ggobj = p,
+  width_svg = 10, height_svg = 8,
+  options = list(
+    opts_hover(css = "stroke-width:2; opacity:1;"),
+    opts_selection(type = "multiple", css = "stroke-width:3;"),
+    opts_toolbar(saveaspng = TRUE),
+    opts_zoom(max = 4)
+  )
+)
+
+#### Stats
+
+
+# # Data we built earlier
+# div <- shannon_by_core %>%
+#   select(Core, Site, Shannon_H, Richness_S, Evenness_J) %>%
+#   mutate(Site = factor(Site, levels = c("L","H")))  # baseline = L
+# 
+# # For Beta regression (J' in (0,1)), move exact 0/1 slightly inside using Smithson-Verkuilen
+# N <- nrow(div)
+# div <- div %>%
+#   mutate(Evenness_beta = (Evenness_J * (N - 1) + 0.5) / N)
+# 
+# # ---------- 1) Shannon H′ : Student-t (robust Gaussian) ----------
+# fit_H <- brm(
+#   Shannon_H ~ 0 + Site,               # group means directly
+#   data   = div,
+#   family = student(),
+#   prior  = c(
+#     prior(normal(0, 5), class = "b"),
+#     prior(student_t(3, 0, 2.5), class = "sigma"),
+#     prior(gamma(2, 0.1), class = "nu")
+#   ),
+#   chains = 4, iter = 4000, cores = 4, seed = 1
+# )
+# 
+# draws_H <- as_draws_df(fit_H)
+# diff_H  <- draws_H$b_SiteH - draws_H$b_SiteL    # posterior of H - L (on original scale)
+# 
+# # ---------- 2) Richness S : Negative Binomial ----------
+# fit_S <- brm(
+#   Richness_S ~ 0 + Site,
+#   data   = div,
+#   family = negbinomial(),              # allows overdispersion
+#   prior  = c(
+#     prior(normal(0, 2), class = "b"),  # on log mean
+#     prior(exponential(1), class = "shape")
+#   ),
+#   chains = 4, iter = 4000, cores = 4, seed = 2
+# )
+# 
+# # Work on the response scale (expected richness)
+# epred_S <- posterior_epred(fit_S, newdata = tibble(Site = factor(c("H","L"), levels = c("L","H"))))
+# diff_S  <- epred_S[, 1] - epred_S[, 2]          # H - L (response scale)
+# 
+# # ---------- 3) Evenness J′ : Beta ----------
+# fit_J <- brm(
+#   Evenness_beta ~ 0 + Site,
+#   data   = div,
+#   family = Beta(),
+#   prior  = c(
+#     prior(normal(0, 1.5), class = "b"),  # on logit(mu)
+#     prior(gamma(2, 0.5), class = "phi")
+#   ),
+#   chains = 4, iter = 4000, cores = 4, seed = 3
+# )
+# 
+# # Expected evenness on response scale
+# epred_J <- posterior_epred(fit_J, newdata = tibble(Site = factor(c("H","L"), levels = c("L","H"))))
+# diff_J  <- epred_J[, 1] - epred_J[, 2]          # H - L
+# 
+# # ---------- Summaries (posterior contrasts) ----------
+# summ <- function(x, rope = c(NA, NA)) {
+#   tibble(
+#     mean    = mean(x),
+#     median  = median(x),
+#     ci_low  = quantile(x, 0.025),
+#     ci_high = quantile(x, 0.975),
+#     p_gt0   = mean(x > 0),
+#     p_lt0   = mean(x < 0),
+#     rope_lo = rope[1],
+#     rope_hi = rope[2],
+#     rope_in = if (any(is.na(rope))) NA_real_ else mean(x > rope[1] & x < rope[2])
+#   )
+# }
+# 
+# # Set small ROPEs (adjust to your scientific relevance)
+# rope_H <- c(-0.10,  0.10)   # Shannon units
+# rope_S <- c(-1.00,  1.00)   # species
+# rope_J <- c(-0.05,  0.05)   # evenness units
+# 
+# results_bayes <- bind_rows(
+#   summ(diff_H, rope_H) %>% mutate(metric = "Shannon H′ (H–L)"),
+#   summ(diff_S, rope_S) %>% mutate(metric = "Richness S (H–L)"),
+#   summ(diff_J, rope_J) %>% mutate(metric = "Evenness J′ (H–L)")
+# ) %>% select(metric, everything())
+# 
+# results_bayes
+```
+
+@fig-Biv_diversity shows per-core diversity for the two areas. Each dot is a core (colored by site) and panels display Shannon diversity (H′), species richness (S), and Pielou evenness (J′). Cores from area H generally sit higher for H′ and S, with less separation for J′.
+
+Bayesian comparisons (reported as H–L) back this up.
+Shannon diversity is higher in H: mean difference +0.365 with a 95% credible interval \[0.155, 0.579] and $P(H\!-\!L>0)=1.00$. Very little posterior mass falls within a small ±0.10 ROPE, so the increase is not only credible but also practically meaningful.
+Richness is also higher in H: +1.23 species on average, 95% CrI \[0.17, 2.31], $P>0=0.988$. About one-third of the posterior lies within a ±1 species ROPE, suggesting a positive but modest gain in the number of species per core.
+For evenness, the difference is small and uncertain: +0.116, 95% CrI \[−0.020, 0.247], $P>0=0.956$, with \~15% of the posterior inside a ±0.05 ROPE.
+
+Overall, area H hosts richer and more diverse bivalve assemblages than area L, while evenness is at most slightly higher in H and may be similar between areas.
+
+# Relationship between bivalves and seagrass biomass
+
+```{r Biv_seagrass}
+#| label: fig-Biv_seagrass
+#| fig-cap: Density of bivalves in relation with the total biomass of seagrass (sum of above ground and below ground biomass) for site H and L. 
+#| echo: false
+#| error: false
+#| message: false
+#| warning: false
+#| out-width: "95%"
+
+library(dplyr)
+library(tidyr)
+library(vegan)
+library(ggplot2)
+library(ggiraph)
+library(scales)
+library(tidytext)  # for reorder_within / scale_y_reordered
+library(glue)
+library(brms)       # Bayesian models via Stan
+library(posterior) 
+
+Core_Diameter <- 15
+core_area <- pi * ((Core_Diameter/2)^2)
+correction_factor <- (100*100)/core_area
+
+df_bivalve <- read_xlsx("data/Abondance_bivalve_Bourgneuf_Bay_REWRITE_2025.xlsx") %>% 
+  mutate(Station = str_pad(Station, width = 2, pad = "0"),
+         Core = paste0(Site,"_",Station),
+         Density = Abondance * correction_factor) %>% 
+  dplyr::filter(Species != "Inconnu") %>% 
+  mutate(Species = gsub("Scobicularia","Scrobicularia",Species),
+         Species = gsub("derussatus","decussatus", Species))
+
+# --- Core/species universes ---
+cores   <- df_bivalve %>% distinct(Core, Site)  # one site per core expected
+species <- df_bivalve %>% distinct(Species)
+
+# sanity check: duplicated core->site?
+dup_cores <- cores %>% count(Core) %>% filter(n > 1)
+if (nrow(dup_cores) > 0) {
+  warning("Some cores map to multiple Sites; check 'cores' table.")
+}
+
+# --- Long community table with all Core x Species (zeros filled) ---
+comm_long <- df_bivalve %>%
+  group_by(Core, Species) %>%
+  summarise(Abund = sum(Abondance, na.rm = TRUE), .groups = "drop") %>%
+  complete(Core = cores$Core, Species = species$Species, fill = list(Abund = 0))
+
+# --- Wide matrix for vegan ---
+comm <- comm_long %>%
+  pivot_wider(names_from = Species, values_from = Abund, values_fill = 0) %>%
+  arrange(Core)
+
+mat <- as.matrix(comm[, -1, drop = FALSE])
+
+# --- Diversity metrics per core ---
+H <- vegan::diversity(mat, index = "shannon")      # may be NA for all-zero rows
+S <- vegan::specnumber(mat)
+J <- ifelse(S > 0, H / log(S), 0)
+N <- rowSums(mat)
+
+# replace NA H with 0 for empty cores
+H[is.na(H)] <- 0
+
+shannon_by_core <- tibble(
+  Core       = comm$Core,
+  Shannon_H  = as.numeric(H),
+  Richness_S = as.numeric(S),
+  Evenness_J = as.numeric(J),
+  N_total    = as.integer(N)*correction_factor
+) %>%
+  left_join(cores, by = "Core") 
+
+# --- biomass (convert to g/m²) ---
+dryweight <- readxl::read_xlsx("data/DryWeight_Cores.xlsx") %>% 
+  mutate(A = A * correction_factor,
+         B = B * correction_factor)
+
+
+df_bivalve_seagrass <- shannon_by_core %>% 
+left_join(dryweight, by = c("Core" = "Station")) %>% 
+  mutate(overall_biomass = A+B)
+
+
+# Data for the plot (remove NAs and build tooltips)
+plot_df <- df_bivalve_seagrass %>%
+  filter(is.finite(A), is.finite(Shannon_H)) %>%
+  mutate(
+    tooltip = glue(
+      "<b>Core:</b> {Core}<br/>",
+      "<b>Site:</b> {Site}<br/>",
+      "<b>Shannon H′:</b> {round(Shannon_H, 3)}<br/>",
+      "<b>Above-ground biomass A:</b> {number(A, accuracy = 0.1)} g/m²<br/>",
+      "<b>Below-ground biomass B:</b> {number(B, accuracy = 0.1)} g/m²<br/>",
+      "<b>Total biomass:</b> {number(overall_biomass, accuracy = 0.1)} g/m²"
+    )
+  )
+
+# Plot (points are interactive, smooth shown per site)
+p <- ggplot(plot_df, aes(x = overall_biomass, y = N_total , color = Site)) +
+  geom_point_interactive(aes(tooltip = tooltip, data_id = Core),
+                         size = 3, alpha = 0.9) +
+  geom_smooth(method = "glm", se = TRUE, linewidth = 0.9, alpha = 0.15) +
+  # geom_smooth(data = plot_df, mapping = aes(x = A, y = Shannon_H),color = "black",method = "glm", se = TRUE, linewidth = 0.9, alpha = 0.15) +
+  labs(
+    title = "Bivales per m² vs Seagrass biomass",
+    x = "Biomass of seagrass - Above and below - (g/m²)",
+    y = "Individuals per m²"
+  ) +
+  scale_x_continuous(labels = label_comma()) +
+  theme_minimal(base_size = 14) +
+  theme(
+    legend.position = "top",
+    plot.title = element_text(face = "bold", hjust = 0.5),
+    panel.grid.minor = element_blank()
+  )
+
+g <- girafe(
+  ggobj = p,
+  width_svg = 9, height_svg = 6,
+  options = list(
+    opts_hover(css = "stroke-width:2; opacity:1;"),
+    opts_selection(type = "single"),
+    opts_toolbar(saveaspng = TRUE),
+    opts_zoom(max = 5)
+  )
+)
+
+g
+```
+
+@fig-Biv_seagrass shows the relationship between the density of bivalve and the above-ground biomass of seagrasses.
+
+
+
 ```{r zip outputs}
 #| echo: false
 #| message: false
@@ -877,3 +1348,4 @@ files <- list.files(folder_to_zip, recursive = TRUE, full.names = TRUE)
 
 utils::zip(zipfile = zip_file, files = files)
 ```
+
