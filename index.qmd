@@ -1193,9 +1193,20 @@ Overall, area H hosts richer and more diverse bivalve assemblages than area L, w
 ## Bivalves spatial distribution
 
 ```{r bivalves heatmap}
+#| echo: false
+#| error: false
+#| message: false
+#| eval: false
+#| cache: true
+#| warning: false
+#| out-width: "95%"
+
 library(terra)
 library(tidyverse)
 library(readxl)
+library(gstat)   # IDW / kriging
+library(sf)
+library(sp)
 
 Core_Diameter <- 15
 core_area <- pi * ((Core_Diameter/2)^2)
@@ -1206,39 +1217,153 @@ names(img) <- c(paste0("B",c(1:10)))
 
 mask <- vect("data/shp/mask_Site_L.shp")
 
-zone1 <- mask[1]
+for (z in 1:2){
 
-img_cropped <- img %>% 
-  crop(zone1, mask = T)
+  zone1 <- mask[z]
+  
+  img_cropped <- img %>% 
+    crop(zone1, mask = T) %>% 
+    project("EPSG:32630")
+  
+  df_bivalve <- read_xlsx("data/Abondance_bivalve_Bourgneuf_Bay_REWRITE_2025.xlsx") %>% 
+    mutate(Station = str_pad(Station, width = 2, pad = "0"),
+           Core = paste0(Site,"_",Station),
+           Density = Abondance * correction_factor) %>% 
+    dplyr::filter(Species != "Inconnu") %>% 
+    mutate(Species = gsub("Scobicularia plana","Splana",Species),
+           Species = gsub("Ruditapes derussatus","Rdecu", Species),
+           Species = gsub("Cerastoderma edule","Cedule", Species),
+           Species = gsub("Loripes orbiculatus","Lorbi.", Species),
+           Species = gsub("Macoma balthica","Mbalthica", Species),
+           Species = gsub("Abra tenuis","Atenuis", Species),
+           Species = gsub("Mya arenaria","Marenaria", Species),
+            Species = gsub("Mytilus sp,","Mytilus", Species),
+           Species = gsub("Ruditapes philippinarum","Rphili", Species)) %>% 
+    dplyr::select(Core,Species, Density) %>%
+    mutate(Species = gsub(". ","",Species)) %>% 
+    pivot_wider(names_from = Species, values_from = Density)
+  
+  
+  sampling_station_zone1 <- sf::read_sf("data/shp/Core_Location/Points.shp") %>% 
+    dplyr::select(Name) %>% 
+    left_join(df_bivalve, by = c("Name" = "Core")) %>% 
+    vect() %>% 
+    crop(zone1) %>% 
+    project("EPSG:32630")
+    
+  
+  
+  clear_rast_1 <- img_cropped$B1
+  
+  
+  species <- names(df_bivalve)[-1]
 
-df_bivalve <- read_xlsx("data/Abondance_bivalve_Bourgneuf_Bay_REWRITE_2025.xlsx") %>% 
-  mutate(Station = str_pad(Station, width = 2, pad = "0"),
-         Core = paste0(Site,"_",Station),
-         Density = Abondance * correction_factor) %>% 
-  dplyr::filter(Species != "Inconnu") %>% 
-  mutate(Species = gsub("Scobicularia plana","S. plana",Species),
-         Species = gsub("Ruditapes derussatus","R. decu.", Species),
-         Species = gsub("Cerastoderma edule","C. edule", Species),
-         Species = gsub("Loripes orbiculatus","L. orbi.", Species),
-         Species = gsub("Macoma balthica","M. balthica", Species),
-         Species = gsub("Abra tenuis","A. tenuis", Species),
-         Species = gsub("Mya arenaria","M. arenaria", Species),
-         Species = gsub("Ruditapes philippinarum","R. phili.", Species)) %>% 
-  dplyr::select(Core,Species, Density) %>% 
-  pivot_wider(names_from = Species, values_from = Density)
+  
+  for(sp in species){
+    
+    if(sp == "Mbalthica" & z == 2 ){
+    }else{
+     r_template <- clear_rast_1
+    dens_col   <- sp                  # column in the points with species density
+    
+    # ---- Read & align CRS ----
+    pts <- sampling_station_zone1
+    # Reproject points to match the raster CRS (important for spatial interpolation)
+    if (!identical(crs(pts), crs(r_template))) {
+      pts <- project(pts, r_template)
+    }
+    
+    # ---- Basic checks ----
+    stopifnot(dens_col %in% names(pts))
+    # IDW/kriging should be done in a projected CRS (meters), not lon/lat
+    if (grepl("longlat", crs(r_template), ignore.case = TRUE)) {
+      warning("Your template raster appears to be in lon/lat. ",
+              "Consider projecting it (e.g., to UTM) before interpolating.")
+    }
+    
+    # Keep only points with non-missing density
+    pts <- pts[!is.na(pts[[dens_col]]), ]
+    
+    # ---- Build prediction grid from the template raster ----
+    # Get cell-centers for all *non-NA* cells as points (in the same CRS as the raster)
+    grid_pts <- as.points(r_template, values = FALSE, na.rm = TRUE)
+    
+    # Convert to sf for gstat (gstat works natively with sf)
+    
+    # ---- Convert points to sp (robust for gstat) ----
+    pts_sf <- st_as_sf(pts)
+    # Drop Z/M if present
+    pts_sf <- st_zm(pts_sf, drop = TRUE, what = "ZM")
+    
+    # Remove duplicated coordinates (kriging requires unique locations)
+    coords_mat <- st_coordinates(pts_sf)
+    dup_idx <- duplicated(as.data.frame(coords_mat))
+    if (any(dup_idx)) {
+      # average duplicates
+      pts_sf <- pts_sf %>%
+        mutate(.x = coords_mat[,1], .y = coords_mat[,2]) %>%
+        group_by(.x, .y) %>%
+        summarise(!!dens_col := mean(.data[[dens_col]], na.rm = TRUE), .groups = "drop") %>%
+        st_as_sf(coords = c(".x", ".y"), crs = st_crs(pts_sf))
+    }
+    pts_sp <- as(pts_sf, "Spatial")
+    
+    # ---- Build prediction grid from the raster (only non-NA cells) ----
+    vals <- values(r_template)
+    ok_cells <- which(!is.na(vals))
+    xy <- xyFromCell(r_template, ok_cells)
+    grid_sp <- SpatialPixelsDataFrame(points = SpatialPoints(xy, proj4string = CRS(crs(r_template))),
+                                      data   = data.frame(id = seq_len(nrow(xy))))
+    
+    # ---- Empirical variogram + fit ----
+   form <- as.formula(paste(dens_col, "~ 1"))
+    vg_emp <- variogram(form, data = pts_sp)
+    # Try spherical first; fall back if needed
+    vg_fit <- try(fit.variogram(vg_emp, model = vgm("Sph")), silent = TRUE)
+    if (inherits(vg_fit, "try-error") || any(is.na(vg_fit$psill))) {
+      vg_fit <- fit.variogram(vg_emp, model = vgm("Exp"))
+    }
+    if (any(is.na(vg_fit$psill))) stop("Variogram fit failed. Check data/CRS/duplicates.")
+    
+    # ---- Ordinary kriging on the grid ----
+    ok_sp <- krige(formula = form, locations = pts_sp, newdata = grid_sp, model = vg_fit)
+    
+    # ---- Write predictions back into the terra raster template ----
+    r_ok <- r_template
+    pred <- ok_sp$var1.pred
+    values(r_ok)[ok_cells] <- pred
+    
+    # Optional: mask outside convex hull of points to avoid wild extrapolation
+    hull_sf <- st_convex_hull(st_union(st_geometry(st_as_sf(pts_sp))))
+    r_ok <- mask(r_ok, vect(hull_sf))
+    
+    # ---- Plot & export ----
+    plot(r_ok, main = "Species density — Ordinary Kriging")
+    points(pts, pch = 20, cex = 0.6)
+    writeRaster(r_ok, paste0("data/heatmap_bivalve_density/density_heatmap_",sp,"_zone_",z,".tif"), overwrite = TRUE)  
+    }
+  }
+} 
 
+mask <- vect("data/shp/mask_Site_L.shp")[1]
+mask_32630 <- mask %>% 
+  project("EPSG:32630")
 
-sampling_station_zone1 <- sf::read_sf("data/shp/Core_Location/Points.shp") %>% 
-  dplyr::select(Name) %>% 
-  left_join(df_bivalve, by = c("Name" = "Core")) %>% 
-  vect() %>% 
-  crop(zone1)
+heatmap_plana <- rast("data/heatmap_bivalve_density/density_heatmap_Cedule_zone_1.tif")%>% 
+  crop(mask_32630, mask = T)
+names(heatmap_plana) <- "Cedule"
 
+img <- rast("data/drone/Micasense_Epiphytes_Site_L_cropped.tif") %>% 
+  crop(mask, mask = T) %>% 
+  project("EPSG:32630")
+names(img) <- c(paste0("B",c(1:10)))
 
-clear_rast_1 <- img_cropped$B1
+NDVI <- (img$B10-img$B6)/(img$B10+img$B6)
+names(NDVI) <- "NDVI"
 
-values(clear_rast_1) <- NA
-
+stk <- c(heatmap_plana,NDVI) %>% 
+  as.data.frame() %>% 
+  dplyr::filter(!is.na(Cedule))
 
 ```
 
@@ -1376,9 +1501,7 @@ g <- girafe(
 g
 ```
 
-@fig-Biv_seagrass shows the relationship between the density of bivalve and the above-ground biomass of seagrasses.
-
-
+@fig-Biv_seagrass shows the relationship between the density of bivalve and the overall biomass (below and above ground) of seagrasses. For a given biomass of seagrass, @fig-Biv_seagrass is showing that the Site H have overall higher density of bivalve then site L. 
 
 ```{r zip outputs}
 #| echo: false
