@@ -1190,6 +1190,59 @@ For evenness, the difference is small and uncertain: +0.116, 95% CrI \[−0.020,
 
 Overall, area H hosts richer and more diverse bivalve assemblages than area L, while evenness is at most slightly higher in H and may be similar between areas.
 
+## Bivalves spatial distribution
+
+```{r bivalves heatmap}
+library(terra)
+library(tidyverse)
+library(readxl)
+
+Core_Diameter <- 15
+core_area <- pi * ((Core_Diameter/2)^2)
+correction_factor <- (100*100)/core_area
+
+img <- rast("data/drone/Micasense_Epiphytes_Site_L_cropped.tif")
+names(img) <- c(paste0("B",c(1:10)))
+
+mask <- vect("data/shp/mask_Site_L.shp")
+
+zone1 <- mask[1]
+
+img_cropped <- img %>% 
+  crop(zone1, mask = T)
+
+df_bivalve <- read_xlsx("data/Abondance_bivalve_Bourgneuf_Bay_REWRITE_2025.xlsx") %>% 
+  mutate(Station = str_pad(Station, width = 2, pad = "0"),
+         Core = paste0(Site,"_",Station),
+         Density = Abondance * correction_factor) %>% 
+  dplyr::filter(Species != "Inconnu") %>% 
+  mutate(Species = gsub("Scobicularia plana","S. plana",Species),
+         Species = gsub("Ruditapes derussatus","R. decu.", Species),
+         Species = gsub("Cerastoderma edule","C. edule", Species),
+         Species = gsub("Loripes orbiculatus","L. orbi.", Species),
+         Species = gsub("Macoma balthica","M. balthica", Species),
+         Species = gsub("Abra tenuis","A. tenuis", Species),
+         Species = gsub("Mya arenaria","M. arenaria", Species),
+         Species = gsub("Ruditapes philippinarum","R. phili.", Species)) %>% 
+  dplyr::select(Core,Species, Density) %>% 
+  pivot_wider(names_from = Species, values_from = Density)
+
+
+sampling_station_zone1 <- sf::read_sf("data/shp/Core_Location/Points.shp") %>% 
+  dplyr::select(Name) %>% 
+  left_join(df_bivalve, by = c("Name" = "Core")) %>% 
+  vect() %>% 
+  crop(zone1)
+
+
+clear_rast_1 <- img_cropped$B1
+
+values(clear_rast_1) <- NA
+
+
+```
+
+
 # Relationship between bivalves and seagrass biomass
 
 ```{r Biv_seagrass}
