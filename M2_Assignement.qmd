@@ -1,0 +1,98 @@
+---
+title: "M2 Assignement"
+author: "Simon Oiry"
+editor_options: 
+  chunk_output_type: console
+---
+
+
+This page demonstrates how to process the data just as the student should, using exactly the same dataset available to them. It can serve as a reference or correction for the student’s assignment.
+
+```{r leafletmap}
+#| fig-cap: Map of Bourgneuf Bay Sampling site
+#| label: fig-Map_BB
+#| echo: false
+#| error: false
+#| message: false
+#| eval: true
+#| warning: false
+#| out-width: "95%"
+
+library(tidyverse)
+library(leaflet)
+library(sf)
+library(leafem)
+library(leaflet.extras2)
+library(terra)
+
+# folder structure: ./www/imgs/...
+img_list <- list.files("data/imgs", recursive = TRUE, full.names = TRUE, pattern = "\\.jpg$") %>%
+  tibble(path = .) %>%
+  mutate(filename = basename(path),
+         station  = substr(filename, 1, 4),
+         url      = paste0(file.path("imgs", filename)))
+
+mask <- read_sf("data/shp/Meadow_BB.shp") %>%
+  st_make_valid() %>%
+  st_transform(4326)
+
+
+mask_S2 <- read_sf("data/shp/Meadow_BB.shp") %>%
+  st_make_valid() %>% 
+  st_buffer(-20)  %>%
+  st_transform(4326)
+
+img <- rast("data/S2_Meadow.tif") %>% 
+  project("EPSG:4326") %>% 
+  crop(mask_S2, mask = T) 
+  
+
+
+
+
+Points <- sf::st_read("data/shp/Core_Location/Points.shp", quiet = TRUE) %>%
+  st_transform(4326) %>%
+  left_join(img_list, by = c("Name" = "station")) %>%
+  filter(!is.na(url)) %>% 
+  mutate(Site = substr(Name,1,1))
+
+pal <- colorFactor(
+  palette = "Set2",   # you can use "Dark2", "Paired", "viridis", etc.
+  domain  = Points$Site
+)
+
+# --- map ---
+leaflet() %>%
+  setView(lng = -2.176695, lat = 46.962474, zoom = 15) %>%
+  addProviderTiles(providers$Esri.WorldImagery, group = "Imagery",
+                   options = providerTileOptions(minZoom = 8, maxZoom = 20)) %>%
+  addRasterRGB(img,r = 4, g = 3, b = 2) %>% 
+  # addPolygons(
+  #   data = mask,
+  #   group = "Meadow",
+  #   color = "#1f78b4", weight = 2, fillOpacity = 0.2
+  # ) %>%
+ addCircleMarkers(
+    data = Points,
+    radius = 4,
+    color = ~pal(Site),      # outline color
+    fillColor = ~pal(Site),  # fill color
+    fillOpacity = 0.8,
+    group = "Coring stations",
+    popup = ~sprintf("<b>Sample:</b> %s<br><img src='%s' width='300'/>", Name, url)
+  ) %>%
+  addLayersControl(overlayGroups = "Coring stations",
+                   options = layersControlOptions(collapsed = FALSE))
+
+dir.create("docs/imgs")
+
+copying <- file.copy(
+    from = list.files("data/imgs", pattern = ".jpg",full.names = TRUE),
+    to   = list.files("data/imgs", pattern = ".jpg",full.names = TRUE) %>% gsub("data","docs",.),
+    recursive = TRUE,
+    overwrite = TRUE
+)
+
+# htmlwidgets::saveWidget(plot_S2, file="maps/map_Bathy_Quiberon.html", selfcontained = F)
+
+```

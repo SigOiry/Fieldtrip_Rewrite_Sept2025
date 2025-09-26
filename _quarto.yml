@@ -8,8 +8,8 @@ website:
     left:
       - href: index.qmd
         text: Home
-      # - href: Cadiz_Bay.qmd
-      #   text: Cadiz Bay
+      - href: M2_Assignement.qmd
+        text: Master2 Assignement
       # - text: Ria de Aveiro Lagoon      # label that shows in the bar
       #   menu:                   # dropdown starts here
       #     - href: Aveiro_Lagoon.qmd

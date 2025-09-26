@@ -1,5 +1,19 @@
 [
   {
+    "objectID": "M2_Assignement.html",
+    "href": "M2_Assignement.html",
+    "title": "M2 Assignement",
+    "section": "",
+    "text": "This page demonstrates how to process the data just as the student should, using exactly the same dataset available to them. It can serve as a reference or correction for the student’s assignment.\n\n\n\n\n\n\n\n\nFigure 1: Map of Bourgneuf Bay Sampling site"
+  },
+  {
+    "objectID": "data/shp/Meadow_BB.html",
+    "href": "data/shp/Meadow_BB.html",
+    "title": "Bougneuf Bay Field Campaign for Rewrite",
+    "section": "",
+    "text": "&lt;!DOCTYPE qgis PUBLIC ‘http://mrcc.com/qgis.dtd’ ‘SYSTEM’&gt;     dataset\n\n\n       PROJCRS[“WGS 84 / UTM zone 30N”,BASEGEOGCRS[“WGS 84”,ENSEMBLE[“World Geodetic System 1984 ensemble”,MEMBER[“World Geodetic System 1984 (Transit)”],MEMBER[“World Geodetic System 1984 (G730)”],MEMBER[“World Geodetic System 1984 (G873)”],MEMBER[“World Geodetic System 1984 (G1150)”],MEMBER[“World Geodetic System 1984 (G1674)”],MEMBER[“World Geodetic System 1984 (G1762)”],MEMBER[“World Geodetic System 1984 (G2139)”],ELLIPSOID[“WGS 84”,6378137,298.257223563,LENGTHUNIT[“metre”,1]],ENSEMBLEACCURACY[2.0]],PRIMEM[“Greenwich”,0,ANGLEUNIT[“degree”,0.0174532925199433]],ID[“EPSG”,4326]],CONVERSION[“UTM zone 30N”,METHOD[“Transverse Mercator”,ID[“EPSG”,9807]],PARAMETER[“Latitude of natural origin”,0,ANGLEUNIT[“degree”,0.0174532925199433],ID[“EPSG”,8801]],PARAMETER[“Longitude of natural origin”,-3,ANGLEUNIT[“degree”,0.0174532925199433],ID[“EPSG”,8802]],PARAMETER[“Scale factor at natural origin”,0.9996,SCALEUNIT[“unity”,1],ID[“EPSG”,8805]],PARAMETER[“False easting”,500000,LENGTHUNIT[“metre”,1],ID[“EPSG”,8806]],PARAMETER[“False northing”,0,LENGTHUNIT[“metre”,1],ID[“EPSG”,8807]]],CS[Cartesian,2],AXIS[“(E)”,east,ORDER[1],LENGTHUNIT[“metre”,1]],AXIS[“(N)”,north,ORDER[2],LENGTHUNIT[“metre”,1]],USAGE[SCOPE[“Navigation and medium accuracy spatial referencing.”],AREA[“Between 6°W and 0°W, northern hemisphere between equator and 84°N, onshore and offshore. Algeria. Burkina Faso. Côte’ Ivoire (Ivory Coast). Faroe Islands - offshore. France. Ghana. Gibraltar. Ireland - offshore Irish Sea. Mali. Mauritania. Morocco. Spain. United Kingdom (UK).”],BBOX[0,-6,84,0]],ID[“EPSG”,32630]] +proj=utm +zone=30 +datum=WGS84 +units=m +no_defs 3114 32630 EPSG:32630 WGS 84 / UTM zone 30N utm EPSG:7030 false"
+  },
+  {
     "objectID": "index.html",
     "href": "index.html",
     "title": "Field Campaign of Bourgneuf Bay 2025 - REWRITE",
@@ -33,5 +47,12 @@
     "title": "Field Campaign of Bourgneuf Bay 2025 - REWRITE",
     "section": "Bivalve diversity by core",
     "text": "Bivalve diversity by core\n\n\n\n\n\n\n\n\nFigure 8: Interactive lollipop charts of bivalve diversity per core (n = 60). For each core (colored by site), we show Shannon diversity (H′), species richness (S), and Pielou evenness (J′). Metrics were computed from species‐level counts; H′ uses natural logarithms and J′ = H′/ln(S). Lines run from 0 to the core’s value and points mark the estimate; cores with no identified bivalves appear with H′ = 0 and J′ = 0. Hover to see exact values.\n\n\n\n\nFigure 8 shows per-core diversity for the two areas. Each dot is a core (colored by site) and panels display Shannon diversity (H′), species richness (S), and Pielou evenness (J′). Cores from area H generally sit higher for H′ and S, with less separation for J′.\nBayesian comparisons (reported as H–L) back this up. Shannon diversity is higher in H: mean difference +0.365 with a 95% credible interval [0.155, 0.579] and \\(P(H\\!-\\!L&gt;0)=1.00\\). Very little posterior mass falls within a small ±0.10 ROPE, so the increase is not only credible but also practically meaningful. Richness is also higher in H: +1.23 species on average, 95% CrI [0.17, 2.31], \\(P&gt;0=0.988\\). About one-third of the posterior lies within a ±1 species ROPE, suggesting a positive but modest gain in the number of species per core. For evenness, the difference is small and uncertain: +0.116, 95% CrI [−0.020, 0.247], \\(P&gt;0=0.956\\), with ~15% of the posterior inside a ±0.05 ROPE.\nOverall, area H hosts richer and more diverse bivalve assemblages than area L, while evenness is at most slightly higher in H and may be similar between areas."
+  },
+  {
+    "objectID": "index.html#bivalves-spatial-distribution",
+    "href": "index.html#bivalves-spatial-distribution",
+    "title": "Field Campaign of Bourgneuf Bay 2025 - REWRITE",
+    "section": "Bivalves spatial distribution",
+    "text": "Bivalves spatial distribution"
   }
 ]
