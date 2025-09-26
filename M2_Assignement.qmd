@@ -8,6 +8,21 @@ editor_options:
 
 This page demonstrates how to process the data just as the student should, using exactly the same dataset available to them. It can serve as a reference or correction for the student’s assignment.
 
+# Study area & Field data acquisition
+
+A field campaign was organized with Master’s students from the ACES and EBM programs. It took place in the seagrass meadow of Bourgneuf Bay, near the town of Barbâtre on Noirmoutier Island (@fig-Map_BB), on September 9th during low tide. The campaign had a dual purpose: to introduce students to the ecosystem and to collect a total of 60 sediment cores, sampling the top 15–20 cm of the substrate. Two sites were selected for coring. A historical analysis of the meadow over the past 40 years was carried out to identify areas with the most consistent and the most variable seagrass cover. Based on this analysis, site L was chosen in a zone that has shown strong variability in seagrass cover, while site H was located in an area with consistently high seagrass density over the same period.
+
+At both sites, sampling locations were chosen to represent a range of seagrass percent cover. At each station, a photo-quadrat was taken using a 0.25 m² quadrat to estimate seagrass cover. Sediment cores were then collected using a 15 cm diameter PVC tube. Each core was cleaned to remove sediment, retaining only seagrass leaves and rhizomes as well as bivalves.
+
+Back in the lab, each sample was sorted to separate leaves (above-ground biomass) from rhizomes (below-ground biomass). Both fractions were then dried at 60 °C for 48 hours, after which they were weighed for each sampling station.
+
+In order to convert the biomass of the core to a biomass in m² A conversion factor has been applied to each biomass measurements : 
+
+$$
+Biomass_{m²} = [(100*100)/Core_{Area}] * Biomass_{Core} \\
+Core_{Area} = \pi * (15/2)² 
+$$
+
 ```{r leafletmap}
 #| fig-cap: Map of Bourgneuf Bay Sampling site
 #| label: fig-Map_BB
@@ -46,10 +61,6 @@ img <- rast("data/S2_Meadow.tif") %>%
   project("EPSG:4326") %>% 
   crop(mask_S2, mask = T) 
   
-
-
-
-
 Points <- sf::st_read("data/shp/Core_Location/Points.shp", quiet = TRUE) %>%
   st_transform(4326) %>%
   left_join(img_list, by = c("Name" = "station")) %>%
@@ -66,12 +77,8 @@ leaflet() %>%
   setView(lng = -2.176695, lat = 46.962474, zoom = 15) %>%
   addProviderTiles(providers$Esri.WorldImagery, group = "Imagery",
                    options = providerTileOptions(minZoom = 8, maxZoom = 20)) %>%
-  addRasterRGB(img,r = 4, g = 3, b = 2) %>% 
-  # addPolygons(
-  #   data = mask,
-  #   group = "Meadow",
-  #   color = "#1f78b4", weight = 2, fillOpacity = 0.2
-  # ) %>%
+  addRasterRGB(img,r = 4, g = 3, b = 2,
+               group = "Sentinel-2 image") %>% 
  addCircleMarkers(
     data = Points,
     radius = 4,
@@ -81,7 +88,7 @@ leaflet() %>%
     group = "Coring stations",
     popup = ~sprintf("<b>Sample:</b> %s<br><img src='%s' width='300'/>", Name, url)
   ) %>%
-  addLayersControl(overlayGroups = "Coring stations",
+  addLayersControl(overlayGroups = c("Coring stations","Sentinel-2 image"),
                    options = layersControlOptions(collapsed = FALSE))
 
 dir.create("docs/imgs")
@@ -96,3 +103,147 @@ copying <- file.copy(
 # htmlwidgets::saveWidget(plot_S2, file="maps/map_Bathy_Quiberon.html", selfcontained = F)
 
 ```
+
+# Map of NDVI
+
+```{r Map_of_NDVI}
+#| fig-cap: Map of NDVI of the meadow of Bourgneuf Bay
+#| label: fig-Map_NDVI
+#| echo: false
+#| error: false
+#| message: false
+#| eval: true
+#| warning: false
+#| out-width: "95%"
+
+library(tidyverse)
+library(leaflet)
+library(sf)
+library(leafem)
+library(leaflet.extras2)
+library(terra)
+
+mask <- read_sf("data/shp/Meadow_BB.shp") %>%
+  st_make_valid() %>%
+  st_transform(4326)
+
+mask_S2 <- read_sf("data/shp/Meadow_BB.shp") %>%
+  st_make_valid() %>% 
+  st_buffer(-20)  %>%
+  st_transform(4326)
+
+img <- rast("data/S2_Meadow.tif") %>% 
+  project("EPSG:4326") %>% 
+  crop(mask_S2, mask = T)
+
+Points <- sf::st_read("data/shp/Core_Location/Points.shp", quiet = TRUE) %>%
+  st_transform(4326) %>%
+  # left_join(img_list, by = c("Name" = "station")) %>%
+  # filter(!is.na(url)) %>% 
+  mutate(Site = substr(Name,1,1))
+
+pal <- colorFactor(
+  palette = "Set2",   # you can use "Dark2", "Paired", "viridis", etc.
+  domain  = Points$Site
+)
+
+NDVI <- ((img$S2_Meadow_8-1000)-(img$S2_Meadow_4-1000))/((img$S2_Meadow_8-1000)+(img$S2_Meadow_4-1000))
+
+# create a color palette (viridis)
+pal_ndvi <- colorNumeric(
+  palette = viridis::viridis(256),
+  domain = values(NDVI),
+  na.color = "transparent"
+)
+
+# --- map ---
+leaflet() %>%
+  setView(lng = -2.176695, lat = 46.962474, zoom = 15) %>%
+  addProviderTiles(providers$Esri.WorldImagery, group = "Imagery",
+                   options = providerTileOptions(minZoom = 8, maxZoom = 20)) %>%
+  addRasterImage(NDVI,
+                 colors = pal_ndvi,
+                 opacity = 0.8,
+                 group = "NDVI") %>%
+  addCircleMarkers(
+    data = Points,
+    radius = 4,
+    color = ~pal(Site),      # outline color
+    fillColor = ~pal(Site),  # fill color
+    fillOpacity = 0.8,
+    group = "Coring stations",
+    popup = ~sprintf("<b>Sample:</b> %s<br>", Name)
+  ) %>%
+  # wire up click‐popup: show value with 2 decimals
+  addImageQuery(
+    # map    = .,
+    x = NDVI[[1]],
+    project = TRUE,
+    layerId= "NDVI",
+    type   = "mousemove",
+    digits = 2,
+    prefix = ""
+  ) %>% 
+  addLayersControl(
+    overlayGroups = c("NDVI", "Coring stations"),
+    options = layersControlOptions(collapsed = FALSE)
+  ) %>%
+  addLegend(
+    pal = pal_ndvi,
+    values = values(NDVI),
+    title = "NDVI",
+    position = "bottomright"
+  )
+
+stat_meadow <- NDVI %>% 
+  as_tibble() %>% 
+  dplyr::filter(S2_Meadow_8 > 0) %>% 
+  reframe(mean = mean(S2_Meadow_8),
+         min = min(S2_Meadow_8),
+         max = max(S2_Meadow_8))
+```
+
+@fig-Map_NDVI is showing the NDVI over the meadow. Overall the NDVI of non-water pixel is `r round(stat_meadow$mean,2)` with a maximum of `r round(stat_meadow$max,2)`. The average of NDVI over the meadow is particularly low in 2025, and is among the lowest values recorded in September since the start of the remote sensing acquisitions in the 1970's.
+
+# Biomass vs NDVI
+
+```{r BiomassVsNDVI}
+#| fig-cap: Relation between NDVI and Biomass
+#| label: fig-NDVI_Biomass
+#| echo: false
+#| error: false
+#| message: false
+#| eval: true
+#| warning: false
+#| out-width: "95%"
+
+Core_Diameter <- 15
+core_area <- pi * ((Core_Diameter/2)^2)
+correction_factor <- (100*100)/core_area
+
+Points <- vect("data/shp/Core_Location/Points.shp")
+
+# --- biomass (convert to g/m²) ---
+dryweight <- readxl::read_xlsx("data/DryWeight_Cores.xlsx") %>% 
+  mutate(A = A * correction_factor,
+         B = B * correction_factor)
+
+vals <- extract(NDVI, Points, method = "near", bind = TRUE)
+
+# 4) to a plain data frame with your original attributes + NDVI
+df <- as.data.frame(vals) |>
+  rename(NDVI = names(NDVI)) %>% 
+  dplyr::select(Name,NDVI) %>% 
+  left_join(dryweight, by = c("Name" = "Station"))# rename the NDVI column if needed
+
+df %>% 
+  # dplyr::filter(str_detect())
+  ggplot(aes(x = NDVI, y = A))+
+  geom_point(size = 2)+
+  theme_minimal()
+
+```
+
+
+
+
