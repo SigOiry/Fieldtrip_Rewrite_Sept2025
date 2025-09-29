@@ -19,8 +19,10 @@ Back in the lab, each sample was sorted to separate leaves (above-ground biomass
 In order to convert the biomass of the core to a biomass in m² A conversion factor has been applied to each biomass measurements : 
 
 $$
-Biomass_{m²} = [(100*100)/Core_{Area}] * Biomass_{Core} \\
-Core_{Area} = \pi * (15/2)² 
+\begin{align*}
+Biomass_{m^{2}} &= \frac{100 \times 100}{Core_{Area}} \times Biomass_{Core} \\[6pt]
+Core_{Area} &= \pi \times \left(\tfrac{15}{2}\right)^{2}
+\end{align*}
 $$
 
 ```{r leafletmap}
@@ -207,43 +209,281 @@ stat_meadow <- NDVI %>%
 
 # Biomass vs NDVI
 
-```{r BiomassVsNDVI}
-#| fig-cap: Relation between NDVI and Biomass
-#| label: fig-NDVI_Biomass
+Only in Zone H, before coring, a hyperspectral signature of the sample
+was taken using an ASD Fieldspec HandHeld 2. The instrument was
+calibrated in the field for reflectance acquisition using a Spectralon
+with a 99% reflective Lambertian surface (No radiance measurement has
+been done). @fig-hyperspectral_m2 shows that a range of biomass was sampled during the field campaign, with H_04 having the least absorption in the red, indicating a low amount of chlorophyll-a, and H_08 showing the greatest absorption in the red part of the electromagnetic spectrum.
+
+```{r Hyperspectral signature}
+#| label: fig-hyperspectral_m2
+#| fig-cap: Relationship between the NDVI and the above ground biomass of seagrasses sampled in site H. For each fit, the R-square and the Root mean square error are displayed.
 #| echo: false
 #| error: false
 #| message: false
-#| eval: true
 #| warning: false
+#| cache: true
 #| out-width: "95%"
 
-Core_Diameter <- 15
-core_area <- pi * ((Core_Diameter/2)^2)
-correction_factor <- (100*100)/core_area
+library(ggplot2)
+library(ggiraph)
+library(scales)
+library(dplyr)
+library(tidyverse)
+library(plotly)
 
-Points <- vect("data/shp/Core_Location/Points.shp")
+df_sp <- read.delim("data/spectra/20250911_Bourgneuf_H_stations_reflectance.txt") %>% 
+  pivot_longer(-Wavelength, names_to = "spectra", values_to = "ref") %>% 
+  mutate(spectra = substr(spectra, 1,3)) %>% 
+  group_by(Wavelength, spectra) %>% 
+  reframe(ref_mean = mean(ref, na.rm = T),
+          sd = sd(ref)) %>% 
+  ungroup() %>% 
+  mutate(spectra = gsub("H","H_",spectra)) %>% 
+  dplyr::filter(Wavelength > 400,
+                Wavelength < 900) %>% 
+  group_by(spectra) %>% 
+  mutate(ref_std = (ref_mean - min(ref_mean))/(max(ref_mean)-min(ref_mean))) %>% 
+  dplyr::select(-sd) %>% 
+  pivot_longer(c(ref_mean,ref_std), names_to = "Proc",values_to = "value") %>% 
+  ungroup() %>% 
+  mutate(Proc = case_when(Proc == "ref_mean" ~ "Raw",
+                          T ~ "Standardised"))
 
-# --- biomass (convert to g/m²) ---
+
+# df_sp already created above
+
+# make spectra a nicely ordered factor (optional)
+df_sp <- df_sp %>%
+  arrange(spectra, Wavelength) %>%
+  mutate(spectra = factor(spectra, levels = sort(unique(spectra))))
+
+p <- ggplot(
+  df_sp,
+  aes(x = Wavelength, y = value, color = spectra, group = spectra)
+) +
+  facet_wrap(~Proc, scales = "free")+
+  # interactive line: tooltip shows spectra; data_id enables hover styling
+  geom_line_interactive(
+    aes(tooltip = paste0("Spectra: ", spectra),
+        data_id  = spectra),
+    linewidth = 0.9, alpha = 0.9, show.legend = F
+  ) +
+  scale_color_viridis_d(option = "viridis", end = 0.95) +
+  scale_y_continuous(labels = label_percent(accuracy = 1)) +
+  labs(
+    x = "Wavelength (nm)",
+    y = "Reflectance",
+    color = "Spectra"
+  ) +
+  theme_minimal(base_size = 14) +
+  theme(
+    legend.position = "top",
+    legend.title = element_text(size = 12),
+    legend.text  = element_text(size = 11),
+    axis.title   = element_text(size = 13, face = "bold"),
+    axis.text    = element_text(size = 11),
+    panel.grid.minor = element_blank()
+  )
+
+girafe(
+  ggobj = p,
+  width_svg = 7, height_svg = 5,
+  options = list(
+    # thicken the line you hover, fade others
+    opts_hover(css = "stroke-width:2.5px;"),
+    opts_hover_inv(css = "opacity:0.25;"),
+    # nicer tooltip
+    opts_tooltip(opacity = .95, css = "padding:6px; font-size:12px;")
+  )
+)
+```
+
+```{r hyperspectral NDVI_Biomass}
+#| label: fig-hyperspectral_NDVI_Biomass
+#| fig-cap: Relationship between the NDVI of hyperspectral measurement and the dryweight of above ground biomass of seagrass sampled in zone H.
+#| echo: false
+#| error: false
+#| message: false
+#| warning: false
+#| out-width: "95%"
+#| fig-height: 9
+#| fig-width: 6
+
+library(dplyr)
+library(purrr)
+library(broom)
+library(ggplot2)
+library(minpack.lm)
+library(patchwork)
+
+Core_Diameter <- 15 ### diameter of the core used for sampling (in cm)
+
+core_area <- pi*((Core_Diameter/2)^2) #### Area of the core
+
+correction_factor <- (100*100)/core_area #### Correction factor to convert the dry weight to g/m²
+
 dryweight <- readxl::read_xlsx("data/DryWeight_Cores.xlsx") %>% 
-  mutate(A = A * correction_factor,
-         B = B * correction_factor)
+  mutate(A = A*correction_factor,
+         B = B*correction_factor, 
+         Area = substr(Station,1,1))
 
-vals <- extract(NDVI, Points, method = "near", bind = TRUE)
+df_NDVI <- read.delim("data/spectra/20250911_Bourgneuf_H_stations_reflectance.txt") %>% 
+  pivot_longer(-Wavelength, names_to = "spectra", values_to = "ref") %>% 
+  mutate(spectra = substr(spectra, 1,3)) %>% 
+  group_by(Wavelength, spectra) %>% 
+  reframe(ref_mean = mean(ref, na.rm = TRUE),
+          sd = sd(ref)) %>% 
+  ungroup() %>% 
+  mutate(spectra = gsub("H","H_",spectra)) %>% 
+  dplyr::filter(Wavelength > 400,
+                Wavelength < 900) %>% 
+  group_by(spectra) %>% 
+  reframe(
+    RED = ref_mean[which.min(abs(Wavelength - 670))],
+    NIR = ref_mean[which.min(abs(Wavelength - 800))],
+    NDVI = (NIR - RED) / (NIR + RED)
+  ) %>% 
+  left_join(dryweight, by = c("spectra" = "Station")) %>% 
+  dplyr::select(-c(Area,NIR,RED))
 
-# 4) to a plain data frame with your original attributes + NDVI
-df <- as.data.frame(vals) |>
-  rename(NDVI = names(NDVI)) %>% 
-  dplyr::select(Name,NDVI) %>% 
-  left_join(dryweight, by = c("Name" = "Station"))# rename the NDVI column if needed
 
-df %>% 
-  # dplyr::filter(str_detect())
-  ggplot(aes(x = NDVI, y = A))+
-  geom_point(size = 2)+
-  theme_minimal()
+#--- Data (ensure finite, drop NAs) ---
+dat <- df_NDVI %>%
+  select(NDVI, A) %>%
+  filter(is.finite(NDVI), is.finite(A))
+
+# --- helpers ---
+metrics <- function(y, yhat) {
+  sse <- sum((y - yhat)^2)
+  sst <- sum((y - mean(y))^2)
+  tibble(R2 = 1 - sse/sst, RMSE = sqrt(mean((y - yhat)^2)))
+}
+smear_factor <- function(resid) exp(0.5 * stats::var(resid))
+
+# prediction grid
+ndvi_seq <- tibble(NDVI = seq(min(dat$NDVI, na.rm = TRUE),
+                              max(dat$NDVI, na.rm = TRUE), length.out = 200))
+
+# ---- Model specs: fit, predict (original scale), label ----
+specs <- list(
+  linear = list(
+    label = "Linear (A ~ NDVI)",
+    fit = function(d) lm(A ~ NDVI, data = d),
+    pred = function(fit, newd) tibble(A_hat = as.numeric(predict(fit, newd))),
+    eq  = function(fit) {
+      b <- coef(fit); sprintf("A = %.3f + %.3f·NDVI", b[1], b[2])
+    }
+  ),
+  quadratic = list(
+    label = "Quadratic (A ~ NDVI + NDVI^2)",
+    fit = function(d) lm(A ~ poly(NDVI, 2, raw = TRUE), data = d),
+    pred = function(fit, newd) tibble(A_hat = as.numeric(predict(fit, newd))),
+    eq  = function(fit) {
+      b <- coef(fit); sprintf("A = %.3f + %.3f·NDVI + %.3f·NDVI²", b[1], b[2], b[3])
+    }
+  ),
+  log_linear = list(
+    label = "Log-linear (A ~ log(NDVI))",
+    fit = function(d) { d2 <- d %>% filter(NDVI > 0); lm(A ~ log(NDVI), data = d2) },
+    pred = function(fit, newd) {
+      newd2 <- newd %>% mutate(NDVI = pmax(NDVI, .Machine$double.eps))
+      tibble(A_hat = as.numeric(predict(fit, newd2)))
+    },
+    eq  = function(fit) { b <- coef(fit); sprintf("A = %.3f + %.3f·log(NDVI)", b[1], b[2]) }
+  ),
+  exponential = list(
+    label = "Exponential (A = a·e^{b·NDVI})",
+    fit = function(d) { d2 <- d %>% filter(A > 0); lm(log(A) ~ NDVI, data = d2) },
+    pred = function(fit, newd) {
+      sf <- smear_factor(residuals(fit))
+      tibble(A_hat = as.numeric(exp(predict(fit, newd)) * sf))
+    },
+    eq  = function(fit) {
+      b <- coef(fit); sprintf("A = %.3f·e^{%.3f·NDVI}", exp(b[1]), b[2])
+    }
+  ),
+  power = list(
+    label = "Power (A = a·NDVI^b)",
+    fit = function(d) { d2 <- d %>% filter(A > 0, NDVI > 0); lm(log(A) ~ log(NDVI), data = d2) },
+    pred = function(fit, newd) {
+      newd2 <- newd %>% mutate(NDVI = pmax(NDVI, .Machine$double.eps))
+      sf <- smear_factor(residuals(fit))
+      tibble(A_hat = as.numeric(exp(predict(fit, newd2)) * sf))
+    },
+    eq  = function(fit) {
+      b <- coef(fit); sprintf("A = %.3f·NDVI^{%.3f}", exp(b[1]), b[2])
+    }
+  )
+)
+
+# ---- Bootstrap CI function (shared) ----
+bootstrap_ci <- function(spec, d, newd, B = 400, conf = 0.95, seed = 123) {
+  set.seed(seed)
+  fit0  <- spec$fit(d)
+  pred0 <- spec$pred(fit0, newd) %>% pull(A_hat)
+  obs_hat <- spec$pred(fit0, d) %>% pull(A_hat)
+  stats0  <- metrics(d$A, obs_hat)
+
+  P <- matrix(NA_real_, nrow = nrow(newd), ncol = B)
+  b <- 1
+  while (b <= B) {
+    idx <- sample(seq_len(nrow(d)), replace = TRUE)
+    db  <- d[idx, , drop = FALSE]
+    fb  <- try(spec$fit(db), silent = TRUE)
+    if (inherits(fb, "try-error")) next
+    pb  <- try(spec$pred(fb, newd) %>% pull(A_hat), silent = TRUE)
+    if (inherits(pb, "try-error") || any(!is.finite(pb))) next
+    P[, b] <- pb
+    b <- b + 1
+  }
+  alpha <- (1 - conf) / 2
+  lwr <- apply(P, 1, quantile, probs = alpha, na.rm = TRUE)
+  upr <- apply(P, 1, quantile, probs = 1 - alpha, na.rm = TRUE)
+
+  list(fit = fit0,
+       grid = bind_cols(newd, tibble(A_hat = pred0, lwr = lwr, upr = upr)),
+       stats = stats0)
+}
+
+# ---- Run the 5 models ----
+results_list <- purrr::imap(specs, function(spec, key) {
+  res <- bootstrap_ci(spec, dat, ndvi_seq, B = 400, conf = 0.95, seed = 42)
+  list(
+    key   = key,
+    label = spec$label,
+    fit   = res$fit,
+    grid  = res$grid,
+    eq    = specs[[key]]$eq(res$fit),
+    stats = res$stats
+  )
+})
+
+# ---- Build one plot per model ----
+make_panel <- function(res) {
+  eq_text  <- res$eq
+  r2_text  <- sprintf("R² = %.3f | RMSE = %.2f", res$stats$R2, res$stats$RMSE)
+  lbl_text <- paste(eq_text, r2_text, sep = "\n")
+
+  ggplot() +
+    geom_point(data = dat, aes(NDVI, A), alpha = 0.8) +
+    geom_ribbon(data = res$grid, aes(NDVI, ymin = lwr, ymax = upr), alpha = 0.2) +
+    geom_line(data = res$grid, aes(NDVI, A_hat), linewidth = 1) +
+    labs(title = res$label, x = "NDVI", y = "Above ground biomass (g/m²)") +
+    annotate("text", x = 0.15, y = Inf, hjust = 0, vjust = 1.2,
+             label = lbl_text, size = 3) +
+    theme_minimal(base_size = 8)+
+    theme(plot.title = element_text(size = 10))
+}
+
+panels <- lapply(results_list, make_panel)
+
+# ---- Patchwork layout for 5 panels ----
+wrap_plots(panels, ncol = 2)
 
 ```
 
+$$ \begin{flalign*} \text{Linear: } & \quad A = -19.952 + 185.677 \cdot \mathrm{NDVI} && \\[6pt] \textcolor{BurntOrange}{\text{Quadratic: }} & \quad A = -0.643 + 83.650 \cdot \mathrm{NDVI} + 120.532 \cdot \mathrm{NDVI}^{2} && \\[6pt] \text{Log-linear: } & \quad A = 121.622 + 67.956 \cdot \log(\mathrm{NDVI}) && \\[6pt] \text{Exponential: } & \quad A = 9.784 \cdot e^{\,3.796 \cdot \mathrm{NDVI}} && \\[6pt] \text{Power law: } & \quad A = 187.326 \cdot \mathrm{NDVI}^{1.457} && \end{flalign*} $$
 
 
 

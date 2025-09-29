@@ -29,6 +29,7 @@ format:
       - sandstone
     css: styles.css
     toc: true
+    include-in-header: library.tex
 
 editor: source
 

@@ -807,7 +807,6 @@ girafe(
 
 ```
 
-
 ```{r leafletmap}
 #| fig-cap: Map of Bourgneuf Bay Sampling site
 #| echo: false
