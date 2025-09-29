@@ -16,3 +16,10 @@ terra
 ggiraph
 scales
 plotly
+broom
+minpack.lm
+patchwork
+sp
+raster
+RColorBrewer
+leafsync

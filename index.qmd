@@ -486,7 +486,7 @@ To estimate, for each spectrum, how long the instrument had been running at the 
 #| error: false
 #| message: false
 #| warning: false
-#| cache: true
+#| cache: false
 #| out-width: "95%"
 
 library(exiftoolr)
@@ -1196,7 +1196,7 @@ Overall, area H hosts richer and more diverse bivalve assemblages than area L, w
 #| error: false
 #| message: false
 #| eval: false
-#| cache: true
+#| cache: false
 #| warning: false
 #| out-width: "95%"
 

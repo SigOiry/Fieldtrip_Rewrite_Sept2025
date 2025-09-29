@@ -299,8 +299,12 @@ girafe(
 )
 ```
 
-```{r hyperspectral NDVI_Biomass}
-#| label: fig-hyperspectral_NDVI_Biomass
+## Above ground biomass
+
+From the hyperspectral signatures presented in @fig-hyperspectral_m2, the Normalized Difference Vegetation Index (NDVI) was computed for each sampling station. To evaluate how well this index can predict seagrass biomass, we examined its relationship with both above- and below-ground dry weight biomass. Several functional forms were tested, including linear, quadratic, log-linear, exponential, and power-law models, in order to capture potential nonlinearities in the NDVI–biomass relationship. For each model, the goodness of fit was assessed using the coefficient of determination (R²) and the root mean square error (RMSE).
+
+```{r hyperspectral NDVI_ABiomass}
+#| label: fig-hyperspectral_NDVI_ABiomass
 #| fig-cap: Relationship between the NDVI of hyperspectral measurement and the dryweight of above ground biomass of seagrass sampled in zone H.
 #| echo: false
 #| error: false
@@ -463,7 +467,8 @@ results_list <- purrr::imap(specs, function(spec, key) {
 make_panel <- function(res) {
   eq_text  <- res$eq
   r2_text  <- sprintf("R² = %.3f | RMSE = %.2f", res$stats$R2, res$stats$RMSE)
-  lbl_text <- paste(eq_text, r2_text, sep = "\n")
+  # lbl_text <- paste(eq_text, r2_text, sep = "\n")
+  lbl_text = r2_text
 
   ggplot() +
     geom_point(data = dat, aes(NDVI, A), alpha = 0.8) +
@@ -483,7 +488,334 @@ wrap_plots(panels, ncol = 2)
 
 ```
 
-$$ \begin{flalign*} \text{Linear: } & \quad A = -19.952 + 185.677 \cdot \mathrm{NDVI} && \\[6pt] \textcolor{BurntOrange}{\text{Quadratic: }} & \quad A = -0.643 + 83.650 \cdot \mathrm{NDVI} + 120.532 \cdot \mathrm{NDVI}^{2} && \\[6pt] \text{Log-linear: } & \quad A = 121.622 + 67.956 \cdot \log(\mathrm{NDVI}) && \\[6pt] \text{Exponential: } & \quad A = 9.784 \cdot e^{\,3.796 \cdot \mathrm{NDVI}} && \\[6pt] \text{Power law: } & \quad A = 187.326 \cdot \mathrm{NDVI}^{1.457} && \end{flalign*} $$
+$$ \begin{flalign*} \text{Linear: } & \quad Above = -19.952 + 185.677 \cdot \mathrm{NDVI} && \\[6pt] \textcolor{BurntOrange}{\text{Quadratic: }} & \quad Above = -0.643 + 83.650 \cdot \mathrm{NDVI} + 120.532 \cdot \mathrm{NDVI}^{2} && \\[6pt] \text{Log-linear: } & \quad Above = 121.622 + 67.956 \cdot \log(\mathrm{NDVI}) && \\[6pt] \text{Exponential: } & \quad Above = 9.784 \cdot e^{\,3.796 \cdot \mathrm{NDVI}} && \\[6pt] \text{Power law: } & \quad Above = 187.326 \cdot \mathrm{NDVI}^{1.457} && \end{flalign*} $$
+The results, summarized in @fig-hyperspectral_NDVI_ABiomass, show that the quadratic model provided the best fits, with R² values around 0.657 and lowest RMSE compared to the other formulations, indicating that NDVI is a reliable predictor of above-ground seagrass biomass in this meadow.
+ 
+## Below ground biomass
 
+The relationships between NDVI and below-ground seagrass biomass were generally weaker than those observed for above-ground biomass. Across all functional forms tested (linear, quadratic, log-linear, exponential, and power law), the models explained less variance, with R² values ranging between 0.42 and 0.46 and RMSE around 21 g·m² (@fig-hyperspectral_NDVI_BBiomass). In comparison, the best above-ground models (quadratic and power law) reached R² values of about 0.65 and lower RMSE (~18 g·m²), highlighting a stronger predictive capacity of NDVI for the photosynthetic canopy than for the rhizome and root fraction. Among the below-ground fits, the quadratic and power law formulations again performed slightly better than the others, but improvements over the linear model were marginal. These results confirm that NDVI is more sensitive to variations in above-ground biomass, which directly affect canopy reflectance, whereas below-ground biomass shows only weak indirect correlations with spectral indices derived from hyperspectral measurements.
+
+```{r hyperspectral NDVI_BBiomass}
+#| label: fig-hyperspectral_NDVI_BBiomass
+#| fig-cap: Relationship between the NDVI of hyperspectral measurement and the dryweight of below ground biomass of seagrass sampled in zone H.
+#| echo: false
+#| error: false
+#| message: false
+#| warning: false
+#| out-width: "95%"
+#| fig-height: 9
+#| fig-width: 6
+
+library(dplyr)
+library(purrr)
+library(broom)
+library(ggplot2)
+library(minpack.lm)
+library(patchwork)
+
+Core_Diameter <- 15 ### diameter of the core used for sampling (in cm)
+
+core_area <- pi*((Core_Diameter/2)^2) #### Area of the core
+
+correction_factor <- (100*100)/core_area #### Correction factor to convert the dry weight to g/m²
+
+dryweight <- readxl::read_xlsx("data/DryWeight_Cores.xlsx") %>% 
+  mutate(A = A*correction_factor,
+         B = B*correction_factor, 
+         Area = substr(Station,1,1))
+
+df_NDVI <- read.delim("data/spectra/20250911_Bourgneuf_H_stations_reflectance.txt") %>% 
+  pivot_longer(-Wavelength, names_to = "spectra", values_to = "ref") %>% 
+  mutate(spectra = substr(spectra, 1,3)) %>% 
+  group_by(Wavelength, spectra) %>% 
+  reframe(ref_mean = mean(ref, na.rm = TRUE),
+          sd = sd(ref)) %>% 
+  ungroup() %>% 
+  mutate(spectra = gsub("H","H_",spectra)) %>% 
+  dplyr::filter(Wavelength > 400,
+                Wavelength < 900) %>% 
+  group_by(spectra) %>% 
+  reframe(
+    RED = ref_mean[which.min(abs(Wavelength - 670))],
+    NIR = ref_mean[which.min(abs(Wavelength - 800))],
+    NDVI = (NIR - RED) / (NIR + RED)
+  ) %>% 
+  left_join(dryweight, by = c("spectra" = "Station")) %>% 
+  dplyr::select(-c(Area,NIR,RED))
+
+
+#--- Data (ensure finite, drop NAs) ---
+dat <- df_NDVI %>%
+  select(NDVI, B) %>%
+  filter(is.finite(NDVI), is.finite(B)) %>% 
+  rename(Below = "B")
+
+# --- helpers ---
+metrics <- function(y, yhat) {
+  sse <- sum((y - yhat)^2)
+  sst <- sum((y - mean(y))^2)
+  tibble(R2 = 1 - sse/sst, RMSE = sqrt(mean((y - yhat)^2)))
+}
+smear_factor <- function(resid) exp(0.5 * stats::var(resid))
+
+# prediction grid
+ndvi_seq <- tibble(NDVI = seq(min(dat$NDVI, na.rm = TRUE),
+                              max(dat$NDVI, na.rm = TRUE), length.out = 200))
+
+# ---- Model specs: fit, predict (original scale), label ----
+specs <- list(
+  linear = list(
+    label = "Linear (Below ~ NDVI)",
+    fit = function(d) lm(Below ~ NDVI, data = d),
+    pred = function(fit, newd) tibble(Below_hat = as.numeric(predict(fit, newd))),
+    eq  = function(fit) {
+      b <- coef(fit); sprintf("Below = %.3f + %.3f·NDVI", b[1], b[2])
+    }
+  ),
+  quadratic = list(
+    label = "Quadratic (Below ~ NDVI + NDVI^2)",
+    fit = function(d) lm(Below ~ poly(NDVI, 2, raw = TRUE), data = d),
+    pred = function(fit, newd) tibble(Below_hat = as.numeric(predict(fit, newd))),
+    eq  = function(fit) {
+      b <- coef(fit); sprintf("Below = %.3f + %.3f·NDVI + %.3f·NDVI²", b[1], b[2], b[3])
+    }
+  ),
+  log_linear = list(
+    label = "Log-linear (Below ~ log(NDVI))",
+    fit = function(d) { d2 <- d %>% filter(NDVI > 0); lm(Below ~ log(NDVI), data = d2) },
+    pred = function(fit, newd) {
+      newd2 <- newd %>% mutate(NDVI = pmax(NDVI, .Machine$double.eps))
+      tibble(Below_hat = as.numeric(predict(fit, newd2)))
+    },
+    eq  = function(fit) { b <- coef(fit); sprintf("Below = %.3f + %.3f·log(NDVI)", b[1], b[2]) }
+  ),
+  exponential = list(
+    label = "Exponential (Below = a·e^{b·NDVI})",
+    fit = function(d) { d2 <- d %>% filter(Below > 0); lm(log(Below) ~ NDVI, data = d2) },
+    pred = function(fit, newd) {
+      sf <- smear_factor(residuals(fit))
+      tibble(Below_hat = as.numeric(exp(predict(fit, newd)) * sf))
+    },
+    eq  = function(fit) {
+      b <- coef(fit); sprintf("Below = %.3f·e^{%.3f·NDVI}", exp(b[1]), b[2])
+    }
+  ),
+  power = list(
+    label = "Power (Below = a·NDVI^b)",
+    fit = function(d) { d2 <- d %>% filter(Below > 0, NDVI > 0); lm(log(Below) ~ log(NDVI), data = d2) },
+    pred = function(fit, newd) {
+      newd2 <- newd %>% mutate(NDVI = pmax(NDVI, .Machine$double.eps))
+      sf <- smear_factor(residuals(fit))
+      tibble(Below_hat = as.numeric(exp(predict(fit, newd2)) * sf))
+    },
+    eq  = function(fit) {
+      b <- coef(fit); sprintf("Below = %.3f·NDVI^{%.3f}", exp(b[1]), b[2])
+    }
+  )
+)
+
+# ---- Bootstrap CI function (shared) ----
+bootstrap_ci <- function(spec, d, newd, B = 400, conf = 0.95, seed = 123) {
+  set.seed(seed)
+  fit0  <- spec$fit(d)
+  pred0 <- spec$pred(fit0, newd) %>% pull(Below_hat)
+  obs_hat <- spec$pred(fit0, d) %>% pull(Below_hat)
+  stats0  <- metrics(d$Below, obs_hat)
+
+  P <- matrix(NA_real_, nrow = nrow(newd), ncol = B)
+  b <- 1
+  while (b <= B) {
+    idx <- sample(seq_len(nrow(d)), replace = TRUE)
+    db  <- d[idx, , drop = FALSE]
+    fb  <- try(spec$fit(db), silent = TRUE)
+    if (inherits(fb, "try-error")) next
+    pb  <- try(spec$pred(fb, newd) %>% pull(Below_hat), silent = TRUE)
+    if (inherits(pb, "try-error") || any(!is.finite(pb))) next
+    P[, b] <- pb
+    b <- b + 1
+  }
+  alpha <- (1 - conf) / 2
+  lwr <- apply(P, 1, quantile, probs = alpha, na.rm = TRUE)
+  upr <- apply(P, 1, quantile, probs = 1 - alpha, na.rm = TRUE)
+
+  list(fit = fit0,
+       grid = bind_cols(newd, tibble(Below_hat = pred0, lwr = lwr, upr = upr)),
+       stats = stats0)
+}
+
+# ---- Run the 5 models ----
+results_list <- purrr::imap(specs, function(spec, key) {
+  res <- bootstrap_ci(spec, dat, ndvi_seq, B = 400, conf = 0.95, seed = 42)
+  list(
+    key   = key,
+    label = spec$label,
+    fit   = res$fit,
+    grid  = res$grid,
+    eq    = specs[[key]]$eq(res$fit),
+    stats = res$stats
+  )
+})
+
+# ---- Build one plot per model ----
+make_panel <- function(res) {
+  eq_text  <- res$eq
+  r2_text  <- sprintf("R² = %.3f | RMSE = %.2f", res$stats$R2, res$stats$RMSE)
+  # lbl_text <- paste(eq_text, r2_text, sep = "\n")
+  lbl_text = r2_text
+
+  ggplot() +
+    geom_point(data = dat, aes(NDVI, Below), alpha = 0.8) +
+    geom_ribbon(data = res$grid, aes(NDVI, ymin = lwr, ymax = upr), alpha = 0.2) +
+    geom_line(data = res$grid, aes(NDVI, Below_hat), linewidth = 1) +
+    labs(title = res$label, x = "NDVI", y = "Below ground biomass (g/m²)") +
+    annotate("text", x = 0.15, y = Inf, hjust = 0, vjust = 1.2,
+             label = lbl_text, size = 3) +
+    theme_minimal(base_size = 8)+
+    theme(plot.title = element_text(size = 10))
+}
+
+panels <- lapply(results_list, make_panel)
+
+# ---- Patchwork layout for 5 panels ----
+wrap_plots(panels, ncol = 2)
+
+```
+
+$$
+\begin{flalign*}
+\text{Linear: } & \quad Below = -14.984 + 141.623 \cdot \mathrm{NDVI} && \\[6pt]
+\textcolor{BurntOrange}{\text{Quadratic: }} & \quad Below = 4.189 + 84.580 \cdot \mathrm{NDVI} + 67.389 \cdot \mathrm{NDVI}^{2} && \\[6pt]
+\text{Log-linear: } & \quad Below = 93.009 + 51.843 \cdot \log(\mathrm{NDVI}) && \\[6pt]
+\text{Exponential: } & \quad Below = 7.937 \cdot e^{\,3.553 \cdot \mathrm{NDVI}} && \\[6pt]
+\text{Power law: } & \quad Below = 124.392 \cdot \mathrm{NDVI}^{1.350} &&
+\end{flalign*}
+$$
+
+For both the modeling of the above ground and the below ground biomass the **quadratic** relationship will be used for the rest of the analysis. 
+
+# Mapping the biomass of seagrass across the meadow. 
+
+Using the relationship found in @fig-hyperspectral_NDVI_ABiomass and @fig-hyperspectral_NDVI_BBiomass, the biomass of seagrass can be estimated from the NDVI at the scale of the entire mudflat. 
+
+```{r mapping biomass from NDVI}
+#| label: fig-Map_Biomass
+#| fig-cap: Map of Above ground Biomass (Left) and Below ground biomass (right) of the seagrass *Zostera noltei* across the entire meadow
+#| echo: false
+#| eval: true
+#| error: false
+#| message: false
+#| warning: false
+#| cache: true
+#| out-width: "95%"
+#| fig-height: 9
+#| fig-width: 4 
+
+library(tidyverse)
+library(leaflet)
+library(leafem)          # addMouseCoordinates, addImageQuery
+library(leaflet.extras2) # (optional extra controls)
+library(sf)
+library(terra)
+library(raster)          # for leaflet raster compatibility
+library(RColorBrewer)
+library(leafsync) 
+
+mask <- read_sf("data/shp/Meadow_BB.shp") %>%
+  st_make_valid() %>%
+  st_transform(4326)
+
+
+mask_S2 <- read_sf("data/shp/Meadow_BB.shp") %>%
+  st_make_valid() %>% 
+  st_buffer(-20)  %>%
+  st_transform(4326)
+
+img <- rast("data/S2_Meadow.tif") %>% 
+  project("EPSG:4326") %>% 
+  crop(mask_S2, mask = T) 
+  
+NDVI <- ((img$S2_Meadow_8-1000)-(img$S2_Meadow_4-1000))/((img$S2_Meadow_8-1000)+(img$S2_Meadow_4-1000))
+
+A_Biomass <- -0.643+83.65*NDVI + 120.532*(NDVI*NDVI)
+values(A_Biomass)[values(A_Biomass)<0] <- 0
+
+B_Biomass <- 4.189+84.58*NDVI + 67.389*(NDVI*NDVI)
+values(B_Biomass)[values(B_Biomass)<0] <- 0
+
+rA <- A_Biomass
+rB <- B_Biomass
+
+# palettes (different and non-viridis)
+palA <- colorNumeric(
+  palette = colorRampPalette(brewer.pal(9, "YlOrRd"))(256),
+  domain  = raster::values(rA),
+  na.color = "transparent"
+)
+
+palB <- colorNumeric(
+  palette = colorRampPalette(brewer.pal(9, "PuBuGn"))(256),
+  domain  = raster::values(rB),
+  na.color = "transparent"
+)
+
+# a common view (center on mask)
+ctr <- st_coordinates(st_centroid(st_union(mask))) %>% as.numeric()
+
+# get min and max values for the rasters
+rngA <- range(values(rA), na.rm = TRUE)
+rngB <- range(values(rB), na.rm = TRUE)
+
+# --- Map 1: Above-ground biomass (A) ---
+mA <- leaflet(options = leafletOptions(minZoom = 8, preferCanvas = TRUE)) |>
+  addProviderTiles(providers$Esri.WorldImagery, group = "Imagery") |>
+  setView(lng = ctr[1], lat = ctr[2], zoom = 14) |>
+  addPolygons(data = mask, color = "#444", weight = 1, fill = FALSE, group = "Meadow") |>
+  addRasterImage(rA, colors = palA, opacity = 0.85, group = "Above ground", project = TRUE) |>
+  addLegend(
+    pal = palA,
+    values = values(rA),
+    title = "Above-ground biomass (g·m²)",
+    position = "bottomright",
+    labFormat = labelFormat(digits = 0),
+    # only show min and max
+    bins = c(rngA[1], rngA[2])
+  ) |>
+  addImageQuery(rA[[1]], project = TRUE, layer = "Above ground", type = "mousemove", digits = 2, prefix = "") |>
+  addScaleBar(position = "bottomleft")
+
+# --- Map 2: Below-ground biomass (B) ---
+rngB <- range(values(rB), na.rm = TRUE)
+
+mB <- leaflet(options = leafletOptions(minZoom = 8, preferCanvas = TRUE)) |>
+  addProviderTiles(providers$Esri.WorldImagery, group = "Imagery") |>
+  setView(lng = ctr[1], lat = ctr[2], zoom = 14) |>
+  addPolygons(data = mask, color = "#444", weight = 1, fill = FALSE, group = "Meadow") |>
+  addRasterImage(rB, colors = palB, opacity = 0.85, group = "Below ground", project = TRUE) |>
+  addLegend(
+    pal = palB,
+    values = values(rB),
+    title = "Below-ground biomass (g·m²)",
+    position = "bottomright",
+    labFormat = labelFormat(digits = 0),
+    bins = c(rngB[1], rngB[2])  # only min & max
+  ) |>
+  addImageQuery(rB[[1]], project = TRUE, layer = "Below ground",type = "mousemove", digits = 2, prefix = "") |>
+  addScaleBar(position = "bottomleft")
+
+
+# --- Synchronized view (side-by-side) ---
+leafsync::sync(mA, mB)
+
+
+total_Abiomass = A_Biomass %>% 
+  as_tibble() %>% 
+  sum() * 0.1 * 0.001
+
+total_Bbiomass = B_Biomass %>% 
+  as_tibble() %>% 
+  sum() * 0.1 * 0.001
+```
+
+@fig-Map_Biomass shows the spatial distribution of above- and below-ground biomass of Zostera noltei across the study site. In total, an estimated **`r round(total_Abiomass,2)` tons** of leaves and **`r round(total_Bbiomass,2)` tons** of roots are present within the study area.
 
 
