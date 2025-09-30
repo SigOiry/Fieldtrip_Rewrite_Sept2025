@@ -8,11 +8,48 @@ editor_options:
 
 This page demonstrates how to process the data just as the student should, using exactly the same dataset available to them. It can serve as a reference or correction for the student’s assignment.
 
+::: {style="text-align: center; margin-top: 20px;"}
+<button onclick="window.open(&#39;https://github.com/SigOiry/Fieldtrip_Rewrite_Sept2025/raw/refs/heads/main/Output/Data_REWRITE_Bourgneuf_bay.zip&#39;, &#39;_blank&#39;);" style="padding: 10px 20px; background-color: #4CAF50; color: white; border: none; border-radius: 5px; cursor: pointer;">
+
+Download all the data of that campaign
+</button>
+:::
+
 # Study area & Methods
 
 A field campaign was organized with Master’s students from the ACES and EBM programs. It took place in the seagrass meadow of Bourgneuf Bay, near the town of Barbâtre on Noirmoutier Island (@fig-Map_BB), on September 9th during low tide. The campaign had a dual purpose: to introduce students to the ecosystem and to collect a total of 60 sediment cores, sampling the top 15–20 cm of the substrate. Two sites were selected for coring. A historical analysis of the meadow over the past 40 years was carried out to identify areas with the most consistent and the most variable seagrass cover. Based on this analysis, site L was chosen in a zone that has shown strong variability in seagrass cover, while site H was located in an area with consistently high seagrass density over the same period.
 
 At both sites, sampling locations were chosen to represent a range of seagrass percent cover. At each station, a photo-quadrat was taken using a 0.25 m² quadrat to estimate seagrass cover. Sediment cores were then collected using a 15 cm diameter PVC tube. Each core was cleaned to remove sediment, retaining only seagrass leaves and rhizomes as well as bivalves. The location of each sampling station was recorded using an Emlid Reach RS2+ GNSS receiver with RTK corrections from the Teria Network.
+
+
+```{r image patchwork}
+#| echo: false
+#| error: false
+#| message: false
+#| warning: false
+#| fig-width: 10
+#| fig-height: 10
+#| out-width: "95%"
+#| label: fig-images
+#| fig-cap: Patchwork of the 60 photo-quadrat corresponding to the 60 cores performed during the Rewrite field campaign of Bourgneuf Bay. From top-left to bottom right H_01 to H_30 followed by L_01 to L_30.
+
+htmltools::HTML('
+<figure>
+  <img id="gridimg" src="data/imgs/grid.png" alt="Patchwork of the 60 photo-quadrats" style="max-width:95%; cursor:grab; touch-action:none;" />
+</figure>
+
+<link rel="preload" as="script" href="https://cdn.jsdelivr.net/npm/@panzoom/panzoom/dist/panzoom.min.js">
+<script src="https://cdn.jsdelivr.net/npm/@panzoom/panzoom/dist/panzoom.min.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  const el = document.getElementById("gridimg");
+  const pz = Panzoom(el, { maxScale: 8, contain: "outside" });
+  el.parentElement.addEventListener("wheel", pz.zoomWithWheel);
+});
+</script>
+')
+
+```
 
 Back in the lab, each sample was sorted to separate leaves (above-ground biomass) from rhizomes (below-ground biomass). Both fractions were then dried at 60 °C for 48 hours, after which they were weighed for each sampling station.
 
@@ -87,9 +124,9 @@ leaflet() %>%
                group = "Sentinel-2 image") %>% 
  addCircleMarkers(
     data = Points,
-    radius = 4,
-    color = ~pal(Site),      # outline color
-    fillColor = ~pal(Site),  # fill color
+    radius = 3,
+    color = "white",      # outline color
+    fillColor = "white",  # fill color
     fillOpacity = 0.8,
     group = "Coring stations",
     popup = ~sprintf("<b>Sample:</b> %s<br><img src='%s' width='300'/>", Name, url)
@@ -174,9 +211,9 @@ leaflet() %>%
                  group = "NDVI") %>%
   addCircleMarkers(
     data = Points,
-    radius = 4,
-    color = ~pal(Site),      # outline color
-    fillColor = ~pal(Site),  # fill color
+    radius = 3,
+    color = "black",      # outline color
+    fillColor = "black",  # fill color
     fillOpacity = 0.8,
     group = "Coring stations",
     popup = ~sprintf("<b>Sample:</b> %s<br>", Name)
@@ -775,7 +812,7 @@ rngB <- range(values(rB), na.rm = TRUE)
 mA <- leaflet(options = leafletOptions(minZoom = 8, preferCanvas = TRUE)) |>
   addProviderTiles(providers$Esri.WorldImagery, group = "Imagery") |>
   setView(lng = ctr[1], lat = ctr[2], zoom = 14) |>
-  addPolygons(data = mask, color = "#444", weight = 1, fill = FALSE, group = "Meadow") |>
+  # addPolygons(data = mask, color = "#444", weight = 1, fill = FALSE, group = "Meadow") |>
   addRasterImage(rA, colors = palA, opacity = 0.85, group = "Above ground", project = TRUE) |>
   addLegend(
     pal = palA,
@@ -795,7 +832,7 @@ rngB <- range(values(rB), na.rm = TRUE)
 mB <- leaflet(options = leafletOptions(minZoom = 8, preferCanvas = TRUE)) |>
   addProviderTiles(providers$Esri.WorldImagery, group = "Imagery") |>
   setView(lng = ctr[1], lat = ctr[2], zoom = 14) |>
-  addPolygons(data = mask, color = "#444", weight = 1, fill = FALSE, group = "Meadow") |>
+  # addPolygons(data = mask, color = "#444", weight = 1, fill = FALSE, group = "Meadow") |>
   addRasterImage(rB, colors = palB, opacity = 0.85, group = "Below ground", project = TRUE) |>
   addLegend(
     pal = palB,
@@ -1042,6 +1079,8 @@ p <- ggplot(long, aes(x = value, y = Core  , color = Site)) +
     size = 3
   ) +
   facet_wrap(~ metric, scales = "free_x", ncol = 3) +
+      scale_color_brewer(palette = "Set2") +   # or "Dark2" for stronger contrast
+
   scale_y_reordered() +
   labs(title = "Bivalve Diversity by Core (interactive)", x = NULL, y = "Core") +
   theme_minimal(base_size = 13) +
@@ -1271,6 +1310,8 @@ p <- ggplot(plot_df, aes(x = overall_biomass, y = N_total , color = Site)) +
   ) +
   scale_x_continuous(labels = label_comma()) +
   theme_minimal(base_size = 14) +
+  scale_color_brewer(palette = "Set2") +   # or "Dark2" for stronger contrast
+
   theme(
     legend.position = "top",
     plot.title = element_text(face = "bold", hjust = 0.5),
@@ -1341,6 +1382,7 @@ p_faceted <- ggplot(df_long, aes(x = overall_biomass, y = Value, color = Site)) 
     x = "Biomass of seagrass - Above and below - (g/m²)", y = NULL
   ) +
   scale_x_continuous(labels = label_comma()) +
+    scale_color_brewer(palette = "Set2") +   # or "Dark2" for stronger contrast
   theme_minimal(base_size = 14) +
   theme(
     legend.position = "top",
@@ -1364,4 +1406,202 @@ g_faceted
 
 ```
 
+## Focus on *Loripes orbiculatus*
 
+@fig-Loripes_density compares the density of *Loripes orbiculatus* between sites H and L. Median densities were higher at site H (≈85 ind./m²) than at site L (0 ind./m²), with broader variability observed in H. The Kruskal–Wallis test confirmed a significant difference between sites ($\chi^2=9.83$, $p<0.05$), indicating that *L. orbiculatus* was substantially more abundant in H than in L.
+
+```{r Loripes Abundance}
+#| label: fig-Loripes_density
+#| fig-cap: Density of *Loripes orbiculatus* depending on the site were it was sampled. 
+#| echo: false
+#| error: false
+#| message: false
+#| warning: false
+#| out-width: "95%"
+
+library(dplyr)
+library(ggplot2)
+library(scales)
+library(rstatix)   # kruskal_test, dunn_test, add_xy_position
+library(ggpubr)
+
+Core_Diameter <- 15
+core_area <- pi * ((Core_Diameter/2)^2)
+correction_factor <- (100*100)/core_area
+
+df_Loripes_Site <- read_xlsx("data/Abondance_bivalve_Bourgneuf_Bay_REWRITE_2025.xlsx") %>% 
+  mutate(Station = str_pad(Station, width = 2, pad = "0"),
+         Core = paste0(Site,"_",Station),
+         Density = Abondance * correction_factor) %>% 
+  dplyr::filter(Species != "Inconnu") %>% 
+  mutate(Species = gsub("Scobicularia plana","S. plana",Species),
+         Species = gsub("Ruditapes derussatus","R. decu.", Species),
+         Species = gsub("Cerastoderma edule","C. edule", Species),
+         Species = gsub("Loripes orbiculatus","L. orbi.", Species),
+         Species = gsub("Macoma balthica","M. balthica", Species),
+         Species = gsub("Abra tenuis","A. tenuis", Species),
+         Species = gsub("Mya arenaria","M. arenaria", Species),
+         Species = gsub("Ruditapes philippinarum","R. phili.", Species)) %>% 
+  dplyr::filter(Species == "L. orbi.")
+
+kw <- df_Loripes_Site %>% kruskal_test(Density ~ Site)
+
+# Pairwise Dunn post-hoc with positions for plotting
+dunn <- df_Loripes_Site %>%
+  dunn_test(Density ~ Site, p.adjust.method = "BH") %>%
+  add_xy_position(x = "Site")    # positions brackets above boxes
+
+# --- Per-site counts for n labels ---
+counts <- df_Loripes_Site %>%
+  group_by(Site) %>%
+  summarise(n = n(), y = max(Density, na.rm = TRUE) * 1.02, .groups = "drop")
+
+# --- Base plot ---
+p <- df_Loripes_Site %>% 
+  ggplot(aes(x = Site, y = Density, fill = Site)) +
+  geom_boxplot(width = 0.6, alpha = 0.6, color = "black", outlier.shape = NA) +
+  # median tick mark (—) for readability
+  stat_summary(fun = median, geom = "point", shape = 95, size = 7, color = "black") +
+  # n labels
+  geom_text(data = counts, aes(x = Site, y = 240, label = paste0("n = ", n)),
+            vjust = 0, size = 5) +
+  labs(
+    title = "Loripes orbiculatus — Density by Site",
+    subtitle = paste0("Kruskal–Wallis: χ² = ",
+                      round(kw$statistic, 2),
+                      ", df = ", kw$df,
+                      ", p = ", format.pval(kw$p, digits = 3, eps = .001)),
+    x = NULL,
+    y = "Density (ind/m²)"
+  ) +
+  scale_y_continuous(labels = label_comma(), expand = expansion(mult = c(0.02, 0.12))) +
+  scale_fill_brewer(palette = "Set2") +
+  guides(fill = "none") +
+  theme_minimal(base_size = 15) +
+  theme(
+    plot.title = element_text(face = "bold", hjust = 0.5, size = 16),
+    axis.text.x = element_text(face = "bold"),
+    panel.grid.minor = element_blank()
+  )
+
+# --- Add pairwise significance brackets ---
+p + stat_pvalue_manual(
+  dunn,
+  label = "p.adj.signif",  # significance stars (ns, *, **, ***)
+  tip.length = 0.01,
+  bracket.size = 1
+)
+
+```
+
+@fig-Loripes_biomass illustrates the relationship between Loripes orbiculatus density and total seagrass biomass (above- and below-ground combined). Across all samples, a moderate positive correlation was detected (Spearman ρ = 0.501, p < 0.001, n = 59). At the site level, patterns differed: in site H, Loripes density increased significantly with seagrass biomass (ρ = 0.555, p = 0.0015; slope = 0.531), whereas in site L, the relationship was weaker and not statistically significant (ρ = 0.264, p = 0.175; slope = 0.247).
+
+```{r  Loripes Abundance vs seagrass}
+#| label: fig-Loripes_biomass
+#| fig-cap: Density of *Loripes orbiculatus* depending on the total biomass of seagrass.
+#| echo: false
+#| error: false
+#| message: false
+#| warning: false
+#| out-width: "95%"
+
+
+df_Loripes_Site <- read_xlsx("data/Abondance_bivalve_Bourgneuf_Bay_REWRITE_2025.xlsx") %>% 
+  mutate(Station = str_pad(Station, width = 2, pad = "0"),
+         Core = paste0(Site,"_",Station),
+         Density = Abondance * correction_factor) %>% 
+  dplyr::filter(Species != "Inconnu") %>% 
+  mutate(Species = gsub("Scobicularia plana","S. plana",Species),
+         Species = gsub("Ruditapes derussatus","R. decu.", Species),
+         Species = gsub("Cerastoderma edule","C. edule", Species),
+         Species = gsub("Loripes orbiculatus","L. orbi.", Species),
+         Species = gsub("Macoma balthica","M. balthica", Species),
+         Species = gsub("Abra tenuis","A. tenuis", Species),
+         Species = gsub("Mya arenaria","M. arenaria", Species),
+         Species = gsub("Ruditapes philippinarum","R. phili.", Species)) %>% 
+  dplyr::filter(Species == "L. orbi.") %>% 
+  dplyr::select(Station = "Core", Site,Density)
+
+df_Loripes_Seagrass <- dryweight %>% 
+  left_join(df_Loripes_Site, by = "Station")
+
+
+
+plot_df_Loripes <- df_Loripes_Seagrass %>%
+  filter(is.finite(A), is.finite(Density)) %>%
+  mutate(
+    tooltip = glue(
+      "<b>Core:</b> {Station}<br/>",
+      "<b>Site:</b> {Site}<br/>",
+      "<b>Above-ground biomass A:</b> {number(A, accuracy = 0.1)} g/m²<br/>",
+      "<b>Below-ground biomass B:</b> {number(B, accuracy = 0.1)} g/m²<br/>",
+      "<b>Abundance of Loripes:</b> {number(Density, accuracy = 0.1)} ind/m²"
+    )
+  )
+
+plot_df_Loripes2 <- plot_df_Loripes %>%
+  mutate(Biomass = A + B)
+
+# overall Spearman correlation for the subtitle
+ct_all <- cor.test(plot_df_Loripes2$Biomass, plot_df_Loripes2$Density, method = "spearman")
+sub_txt <- glue("Overall Spearman ρ = {round(ct_all$estimate, 3)}, p = {signif(ct_all$p.value, 3)}, n = {nrow(plot_df_Loripes2)}")
+
+# per-site stats (linear slope + Spearman)
+stats_site <- plot_df_Loripes2 %>%
+  group_by(Site) %>%
+  summarise(
+    n        = n(),
+    rho      = suppressWarnings(cor(Biomass, Density, method = "spearman", use = "complete.obs")),
+    p_rho    = suppressWarnings(cor.test(Biomass, Density, method = "spearman")$p.value),
+    slope    = coef(lm(Density ~ Biomass))[2],
+    .groups  = "drop"
+  ) %>%
+  mutate(
+    label = glue("n = {n}\nρ = {round(rho,3)} (p = {signif(p_rho,3)})\nslope = {round(slope,3)}")
+  )
+
+# choose non-overlapping y positions for the labels
+ymax <- max(plot_df_Loripes2$Density, na.rm = TRUE)
+stats_site <- stats_site %>%
+  arrange(desc(Site)) %>%                # ensures different offsets if only two sites
+  mutate(x = -Inf,                       # top-left corner
+         y = seq(ymax, ymax*0.7, length.out = n()))  # stagger vertically
+
+# --- Plot with stats annotations ---
+p <- ggplot(plot_df_Loripes2, aes(x = Biomass, y = Density, color = Site)) +
+  geom_point_interactive(aes(tooltip = tooltip, data_id = Station), size = 3, alpha = 0.9) +
+  geom_smooth(method = "glm", se = TRUE, linewidth = 0.9, alpha = 0.15) +
+  # per-site stats labels (static text on the interactive plot)
+  geom_label(data = stats_site, aes(x = x, y = y, label = label, color = Site),
+             inherit.aes = FALSE, show.legend = F,hjust = -0.05, vjust = 1, fill = "white", alpha = 0.8, label.size = 0.2) +
+  labs(
+    title = "Loripes per m² vs Seagrass biomass",
+    subtitle = sub_txt,
+    x = "Biomass of seagrass — Above + Below (g/m²)",
+    y = "Individuals of Loripes per m²"
+  ) +
+  scale_x_continuous(labels = scales::label_comma()) +
+  theme_minimal(base_size = 14) +
+  scale_color_brewer(palette = "Set2") +
+  theme(
+    legend.position = "top",
+    plot.title = element_text(face = "bold", hjust = 0.5),
+    panel.grid.minor = element_blank()
+  )
+
+g <- girafe(
+  ggobj = p,
+  width_svg = 9, height_svg = 6,
+  options = list(
+    opts_hover(css = "stroke-width:2; opacity:1;"),
+    opts_selection(type = "single"),
+    opts_toolbar(saveaspng = TRUE),
+    opts_zoom(max = 5)
+  )
+)
+
+g
+
+```
+
+**Taken together, these results indicate that *L. orbiculatus* is both more abundant and more closely associated with seagrass biomass in site H, where meadows have maintained consistently high cover over the past 40 years. In contrast, at site L, where seagrass cover has been more variable through time, *Loripes* populations remain sparse and show no clear link with biomass. This suggests that long-term meadow stability may be a key factor supporting dense and persistent *L. orbiculatus* populations.**

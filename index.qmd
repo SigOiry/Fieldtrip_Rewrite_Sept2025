@@ -1,12 +1,12 @@
 ---
-title: "Field Campaign of Bourgneuf Bay 2025 - REWRITE"
+title: "M2 Assignement"
 author: "Simon Oiry"
 editor_options: 
   chunk_output_type: console
-editor: 
-  markdown: 
-    wrap: 72
 ---
+
+
+This page demonstrates how to process the data just as the student should, using exactly the same dataset available to them. It can serve as a reference or correction for the student’s assignment.
 
 ::: {style="text-align: center; margin-top: 20px;"}
 <button onclick="window.open(&#39;https://github.com/SigOiry/Fieldtrip_Rewrite_Sept2025/raw/refs/heads/main/Output/Data_REWRITE_Bourgneuf_bay.zip&#39;, &#39;_blank&#39;);" style="padding: 10px 20px; background-color: #4CAF50; color: white; border: none; border-radius: 5px; cursor: pointer;">
@@ -15,145 +15,12 @@ Download all the data of that campaign
 </button>
 :::
 
-# Field trip organisation
+# Study area & Methods
 
-The summer field campaign in Bourgneuf Bay took place on September 11th,
-2025, at the Barbâtre meadow. Low tide occurred at 14:20 local time,
-with a tidal range of 4.75 m. We arrived on site around 11:00. Two
-distinct sampling areas were selected based on the historical
-consistency of meadow density over the past 40 years. One area, where
-the meadow has consistently shown more than 50% seagrass cover every
-year for the last 40 years, was selected (Zone H), as well as an area
-where meadow cover has been highly inconsistent over the same period
-(Zone L). In each zone, 30 cores were collected, covering a gradient of
-seagrass cover from low (SPC \< 20%) to high (SPC \> 80%). Each core was
-20 cm deep to harvest seagrass leaves, rhizomes, and associated fauna.
+A field campaign was organized with Master’s students from the ACES and EBM programs. It took place in the seagrass meadow of Bourgneuf Bay, near the town of Barbâtre on Noirmoutier Island (@fig-Map_BB), on September 9th during low tide. The campaign had a dual purpose: to introduce students to the ecosystem and to collect a total of 60 sediment cores, sampling the top 15–20 cm of the substrate. Two sites were selected for coring. A historical analysis of the meadow over the past 40 years was carried out to identify areas with the most consistent and the most variable seagrass cover. Based on this analysis, site L was chosen in a zone that has shown strong variability in seagrass cover, while site H was located in an area with consistently high seagrass density over the same period.
 
+At both sites, sampling locations were chosen to represent a range of seagrass percent cover. At each station, a photo-quadrat was taken using a 0.25 m² quadrat to estimate seagrass cover. Sediment cores were then collected using a 15 cm diameter PVC tube. Each core was cleaned to remove sediment, retaining only seagrass leaves and rhizomes as well as bivalves. The location of each sampling station was recorded using an Emlid Reach RS2+ GNSS receiver with RTK corrections from the Teria Network.
 
-## What has been done in each area ?
-
-**Zone L :**
-
--   Photo quadrat
-
--   Coring
-
--   Above and Bellow ground biomass (Dry weight)
-
--   Bivalves Diversity and Density
-
--   Sediment Sampling
-
-**Zone H :**
-
--   Photo quadrat
-
--   Coring
-
--   Above and Bellow ground biomass (Dry weight)
-
--   Bivalves Diversity and Density
-
--   Carbon Estimation
-
--   Hyperspectral measurments
-
--   Sediment Sampling
-
-# Above Ground vs Below Ground biomass
-
-```{r image patchwork}
-#| echo: false
-#| error: false
-#| message: false
-#| warning: false
-#| eval: false
-
-# install.packages(c("magick", "tidyverse"))  # if needed
-library(magick)
-library(tidyverse)
-
-library(magick)
-library(tidyverse)
-
-make_image_grid_tidy <- function(
-  img_paths,
-  ncol = 10,
-  cell_size = 320,
-  font_size = 50,
-  outfile  = "grid.png",
-  pad = 10,
-  bg = "white",
-  label_color = "white",
-  label_box   = "#00000080",
-  letterbox = FALSE
-) {
-  stopifnot(length(img_paths) > 0)
-
-  # helper: square & label one image
-  square_and_label <- function(path, name) {
-    img <- image_read(path)
-    img <- if (letterbox) {
-      img |>
-        image_resize(paste0(cell_size, "x", cell_size)) |>
-        image_extent(paste0(cell_size, "x", cell_size),
-                     gravity = "center", color = bg)
-    } else {
-      img |>
-        image_resize(paste0(cell_size, "x", cell_size, "^")) |>
-        image_crop(paste0(cell_size, "x", cell_size, "+0+0"))
-    }
-    image_annotate(
-      img, text = name, gravity = "southeast",
-      size = font_size, color = label_color, boxcolor = label_box,
-      location = paste0("+", pad, "+", pad)
-    )
-  }
-
-  # tiles
-  tiles_tbl <- tibble(path = img_paths) |>
-    mutate(name = basename(path),
-           img  = map2(path, name, square_and_label))
-
-  # pad to complete last row
-  n <- nrow(tiles_tbl)
-  nrow_g <- ceiling(n / ncol)
-  total  <- nrow_g * ncol
-  if (total > n) {
-    blanks <- tibble(
-      path = NA_character_,
-      name = "",
-      img  = map(seq_len(total - n), ~ image_blank(cell_size, cell_size, color = bg))
-    )
-    tiles_tbl <- bind_rows(tiles_tbl, blanks)
-  }
-
-  # row/col indices
-  tiles_tbl <- tiles_tbl |>
-    mutate(idx = row_number(),
-           row = ceiling(idx / ncol),
-           col = ((idx - 1) %% ncol) + 1) |>
-    arrange(row, col)
-
-  # build each row (horizontally), then stack rows (vertically)
-  row_imgs <- tiles_tbl |>
-    group_split(row, keep = FALSE) |>
-    map(~ {
-      imgs <- .x$img
-      image_append(image_join(imgs), stack = FALSE)
-    })
-
-  final <- image_append(image_join(row_imgs), stack = TRUE)
-
-  image_write(final, path = outfile)
-  message("Wrote: ", normalizePath(outfile))
-  invisible(outfile)
-}
-
-files <- list.files("data/imgs", pattern = "\\.(jpe?g|tif?f)$", full.names = TRUE)
-make_image_grid_tidy(files, ncol = 10, cell_size = 800, outfile = "data/imgs/grid.png")
-
-```
 
 ```{r image patchwork}
 #| echo: false
@@ -184,106 +51,220 @@ document.addEventListener("DOMContentLoaded", function () {
 
 ```
 
-The samples were sorted to separate seagrass above-ground biomass (AGB) from below-ground biomass (BGB), and bivalves were counted and identified. After sorting, the leaf and rhizome fractions were dried for 48 h at 60 °C in a drying oven and then weighed on a precision balance to obtain dry mass for each core. @fig-Above_Below shows the relationship between BGB and AGB for all 60 cores collected in the field. 
-```{r Plot above vs below}
-#| label: fig-Above_Below
-#| fig-cap: Relationship between the above and below ground biomass
+Back in the lab, each sample was sorted to separate leaves (above-ground biomass) from rhizomes (below-ground biomass). Both fractions were then dried at 60 °C for 48 hours, after which they were weighed for each sampling station.
+
+In order to convert the biomass of the core to a biomass in m² A conversion factor has been applied to each biomass measurements : 
+
+$$
+\begin{align*}
+Biomass_{m^{2}} &= \frac{100 \times 100}{Core_{Area}} \times Biomass_{Core} \\[6pt]
+Core_{Area} &= \pi \times \left(\tfrac{15}{2}\right)^{2}
+\end{align*}
+$$
+
+At the same time as sorting the above- and below-ground biomass, students also sorted living bivalves, recording the number of individuals of each species. The bivalve taxonomy was verified by a taxonomic expert from [Bio-Littoral](https://bio-littoral.fr).
+
+To map the entire seagrass meadow, a Sentinel-2 image acquired on 6 September 2025, three days prior to the field campaign, was downloaded from the Copernicus Open Access Hub of the European Space Agency. The image was obtained at Level-2A processing, meaning that it had already been atmospherically corrected using the Sen2Cor algorithm and ortho-rectified to provide surface reflectance values in a cartographic geometry. 
+
+```{r leafletmap}
+#| fig-cap: Map of Bourgneuf Bay Sampling site
+#| label: fig-Map_BB
 #| echo: false
 #| error: false
 #| message: false
+#| eval: true
 #| warning: false
 #| out-width: "95%"
 
-library(ggplot2)
-library(ggiraph)
-library(dplyr)
-library(scales)
 library(tidyverse)
+library(leaflet)
+library(sf)
+library(leafem)
+library(leaflet.extras2)
+library(terra)
 
-Core_Diameter <- 15 ### diameter of the core used for sampling (in cm)
+# folder structure: ./www/imgs/...
+img_list <- list.files("data/imgs", recursive = TRUE, full.names = TRUE, pattern = "\\.jpg$") %>%
+  tibble(path = .) %>%
+  mutate(filename = basename(path),
+         station  = substr(filename, 1, 4),
+         url      = paste0(file.path("imgs", filename)))
 
-core_area <- pi*((Core_Diameter/2)^2) #### Area of the core
+mask <- read_sf("data/shp/Meadow_BB.shp") %>%
+  st_make_valid() %>%
+  st_transform(4326)
 
-correction_factor <- (100*100)/core_area #### Correction factor to convert the dry weight to g/m²
 
-dryweight <- readxl::read_xlsx("data/DryWeight_Cores.xlsx") %>% 
-  mutate(A = A*correction_factor,
-         B = B*correction_factor, 
-         Area = substr(Station,1,1))### Convert the dryweight to be in g/m²
+mask_S2 <- read_sf("data/shp/Meadow_BB.shp") %>%
+  st_make_valid() %>% 
+  st_buffer(-20)  %>%
+  st_transform(4326)
 
-lm<- lm(dryweight$B ~ dryweight$A)$coefficients
+img <- rast("data/S2_Meadow.tif") %>% 
+  project("EPSG:4326") %>% 
+  crop(mask_S2, mask = T) 
+  
+Points <- sf::st_read("data/shp/Core_Location/Points.shp", quiet = TRUE) %>%
+  st_transform(4326) %>%
+  left_join(img_list, by = c("Name" = "station")) %>%
+  filter(!is.na(url)) %>% 
+  mutate(Site = substr(Name,1,1))
 
-p <- ggplot(
-  dryweight,
-  aes(x = A, y = B)
-) +
-  geom_smooth(method = "lm", se = TRUE, alpha = 0.1, linewidth = 1,
-    color = "black") +
-  geom_point_interactive(
-    aes(color = Area,
-      tooltip = paste0(
-        "Sample: ", Station, "\n",
-        "Above ground: ", number(A, accuracy = 0.01), " g/m²\n",
-        "Below ground: ", number(B, accuracy = 0.001), " g/m²\n"
-      )
-    ),
-    alpha = 0.7, size = 2
-  ) +
-  scale_color_manual(values = c(
-    "H" = "#E69F00",   # Orange
-    "L" = "#0072B2"    # Blue
-  ))+
-  labs(
-    x = "Above ground biomass (g/m²)",
-    y = "Below ground biomass  (g/m²)",
-    color = "Area"
-  ) +
-  theme_minimal(base_size = 14) +
-  theme(
-    legend.position = c(0.02, 0.98),
-    legend.justification = c(0, 1),
-    legend.background = element_rect(fill = scales::alpha("white", 0.6), color = "grey80"),
-    legend.title = element_text(size = 13),
-    legend.text  = element_text(size = 12),
-    axis.title   = element_text(size = 14, face = "bold"),
-    axis.text    = element_text(size = 12),
-    panel.grid.minor = element_blank()
-  )
-
-girafe(
-  ggobj = p,
-  width_svg = 7, height_svg = 5,
-  options = list(
-    opts_tooltip(opacity = .95),
-    opts_hover(css = "r:4pt; stroke-width: 2;")
-  )
+pal <- colorFactor(
+  palette = "Set2",   # you can use "Dark2", "Paired", "viridis", etc.
+  domain  = Points$Site
 )
+
+# --- map ---
+leaflet() %>%
+  setView(lng = -2.176695, lat = 46.962474, zoom = 15) %>%
+  addProviderTiles(providers$Esri.WorldImagery, group = "Imagery",
+                   options = providerTileOptions(minZoom = 8, maxZoom = 20)) %>%
+  addRasterRGB(img,r = 4, g = 3, b = 2,
+               group = "Sentinel-2 image") %>% 
+ addCircleMarkers(
+    data = Points,
+    radius = 3,
+    color = "white",      # outline color
+    fillColor = "white",  # fill color
+    fillOpacity = 0.8,
+    group = "Coring stations",
+    popup = ~sprintf("<b>Sample:</b> %s<br><img src='%s' width='300'/>", Name, url)
+  ) %>%
+  addLayersControl(overlayGroups = c("Coring stations","Sentinel-2 image"),
+                   options = layersControlOptions(collapsed = FALSE))
+
+dir.create("docs/imgs")
+
+copying <- file.copy(
+    from = list.files("data/imgs", pattern = ".jpg",full.names = TRUE),
+    to   = list.files("data/imgs", pattern = ".jpg",full.names = TRUE) %>% gsub("data","docs",.),
+    recursive = TRUE,
+    overwrite = TRUE
+)
+
+# htmlwidgets::saveWidget(plot_S2, file="maps/map_Bathy_Quiberon.html", selfcontained = F)
 
 ```
 
-The relationship between the below ground and above ground biomass of *Zostera noltei* in Bourgneuf Bay can be describe as follow:
+# Results 
+## Mapping of the meadow
 
-$$
-Below_{Ground} = 0.64 * Above_{Ground} + 10.04
-$$
+```{r Map_of_NDVI}
+#| fig-cap: Map of NDVI of the meadow of Bourgneuf Bay
+#| label: fig-Map_NDVI
+#| echo: false
+#| error: false
+#| message: false
+#| eval: true
+#| warning: false
+#| out-width: "95%"
 
-Site L and Site H have a similar relationship between those two variables (@fig-Above_Below).
+library(tidyverse)
+library(leaflet)
+library(sf)
+library(leafem)
+library(leaflet.extras2)
+library(terra)
 
-# Hyperspectral signature zone H
+mask <- read_sf("data/shp/Meadow_BB.shp") %>%
+  st_make_valid() %>%
+  st_transform(4326)
+
+mask_S2 <- read_sf("data/shp/Meadow_BB.shp") %>%
+  st_make_valid() %>% 
+  st_buffer(-20)  %>%
+  st_transform(4326)
+
+img <- rast("data/S2_Meadow.tif") %>% 
+  project("EPSG:4326") %>% 
+  crop(mask_S2, mask = T)
+
+Points <- sf::st_read("data/shp/Core_Location/Points.shp", quiet = TRUE) %>%
+  st_transform(4326) %>%
+  # left_join(img_list, by = c("Name" = "station")) %>%
+  # filter(!is.na(url)) %>% 
+  mutate(Site = substr(Name,1,1))
+
+pal <- colorFactor(
+  palette = "Set2",   # you can use "Dark2", "Paired", "viridis", etc.
+  domain  = Points$Site
+)
+
+NDVI <- ((img$S2_Meadow_8-1000)-(img$S2_Meadow_4-1000))/((img$S2_Meadow_8-1000)+(img$S2_Meadow_4-1000))
+
+# create a color palette (viridis)
+pal_ndvi <- colorNumeric(
+  palette = viridis::viridis(256),
+  domain = values(NDVI),
+  na.color = "transparent"
+)
+
+# --- map ---
+leaflet() %>%
+  setView(lng = -2.176695, lat = 46.962474, zoom = 15) %>%
+  addProviderTiles(providers$Esri.WorldImagery, group = "Imagery",
+                   options = providerTileOptions(minZoom = 8, maxZoom = 20)) %>%
+  addRasterImage(NDVI,
+                 colors = pal_ndvi,
+                 opacity = 0.8,
+                 group = "NDVI") %>%
+  addCircleMarkers(
+    data = Points,
+    radius = 3,
+    color = "black",      # outline color
+    fillColor = "black",  # fill color
+    fillOpacity = 0.8,
+    group = "Coring stations",
+    popup = ~sprintf("<b>Sample:</b> %s<br>", Name)
+  ) %>%
+  # wire up click‐popup: show value with 2 decimals
+  addImageQuery(
+    # map    = .,
+    x = NDVI[[1]],
+    project = TRUE,
+    layerId= "NDVI",
+    type   = "mousemove",
+    digits = 2,
+    prefix = ""
+  ) %>% 
+  addLayersControl(
+    overlayGroups = c("NDVI", "Coring stations"),
+    options = layersControlOptions(collapsed = FALSE)
+  ) %>%
+  addLegend(
+    pal = pal_ndvi,
+    values = values(NDVI),
+    title = "NDVI",
+    position = "bottomright"
+  )
+
+stat_meadow <- NDVI %>% 
+  as_tibble() %>% 
+  dplyr::filter(S2_Meadow_8 > 0) %>% 
+  reframe(mean = mean(S2_Meadow_8),
+         min = min(S2_Meadow_8),
+         max = max(S2_Meadow_8))
+```
+
+@fig-Map_NDVI is showing the NDVI over the meadow. Overall the NDVI of non-water pixel is `r round(stat_meadow$mean,2)` with a maximum of `r round(stat_meadow$max,2)`. The average of NDVI over the meadow is particularly low in 2025, and is among the lowest values recorded in September since the start of the remote sensing acquisitions in the 1970's.
+
+## Biomass vs NDVI
 
 Only in Zone H, before coring, a hyperspectral signature of the sample
 was taken using an ASD Fieldspec HandHeld 2. The instrument was
 calibrated in the field for reflectance acquisition using a Spectralon
 with a 99% reflective Lambertian surface (No radiance measurement has
-been done).
+been done). @fig-hyperspectral_m2 shows that a range of biomass was sampled during the field campaign, with H_04 having the least absorption in the red, indicating a low amount of chlorophyll-a, and H_08 showing the greatest absorption in the red part of the electromagnetic spectrum.
 
 ```{r Hyperspectral signature}
-#| label: fig-hyperspectral
-#| fig-cap: Hyperspectrale signature of each core of the Area H. Left plot show the raw reflectance signature while the right plot shows the min-max standardised signatures. 
+#| label: fig-hyperspectral_m2
+#| fig-cap: Relationship between the NDVI and the above ground biomass of seagrasses sampled in site H. For each fit, the R-square and the Root mean square error are displayed.
 #| echo: false
 #| error: false
 #| message: false
 #| warning: false
+#| cache: false
 #| out-width: "95%"
 
 library(ggplot2)
@@ -358,509 +339,538 @@ girafe(
     opts_tooltip(opacity = .95, css = "padding:6px; font-size:12px;")
   )
 )
-
 ```
 
-@fig-hyperspectral shows the hyperspectral signature of all the cores of the area H. Spectra are showing differente level of reflectance, with core H_04 having a relatively strong overall reflectance, with an small absorption peak around 665 nm due to the presence of chlorophyll-a. On the other hand the spectra H_30 is showing a lower overall reflectance, with really low reflectance in the visible and a strong absorption peak of chlorophyll-a around 665nm.
+## Above ground biomass
 
-## About the reflectance anomaly around 760 nm. 
+From the hyperspectral signatures presented in @fig-hyperspectral_m2, the Normalized Difference Vegetation Index (NDVI) was computed for each sampling station. To evaluate how well this index can predict seagrass biomass, we examined its relationship with both above- and below-ground dry weight biomass. Several functional forms were tested, including linear, quadratic, log-linear, exponential, and power-law models, in order to capture potential nonlinearities in the NDVI–biomass relationship. For each model, the goodness of fit was assessed using the coefficient of determination (R²) and the root mean square error (RMSE).
 
-An unexpected reflectance feature can be observed around 761 nm in most of the spectra (@fig-hyperspectral). This feature appears as a positive anomaly in some cases, such as H_04 or H_03, or as a negative anomaly, as in H_02 or H_19. The most likely explanation is an instrumental artifact, for example related to calibration issues of the ASD spectroradiometer. Nevertheless, it is worth noting that at 761 nm vegetation can also produce a narrow reflectance peak due to sunlight-induced chlorophyll fluorescence (SIF). This fluorescence signal arises from the broad chlorophyll a emission around 740 nm that partly fills the atmospheric O₂ absorption band, and has been documented both in terrestrial and aquatic vegetation ([Lu et al. 2016](https://doi.org/10.1002/2016JC011797), [Meroni & Colombo, 2006](https://doi.org/10.1016/j.rse.2006.03.016)). 
-
-To investigate the origin of this feature, the Fluorescence Line Height (FLH;[Lu et al. 2016](https://doi.org/10.1002/2016JC011797)) will be calculated. 
-
-$$
-\mathrm{FLH}(761)
-= R_{rs}(761)
-- \left[
-\frac{769-761}{769-757}
-\big(R_{rs}(757)-R_{rs}(769)\big)
-+ R_{rs}(769)
-\right]
-$$
-
-The FLH values will be compared with NDVI, as proxy of the biomass, with the green leaf index proxy of the greeness of seagrass leaves as well as with the amount of time the ASD had been operating at the moment of spectrum acquisition.
-
-@fig-LH_Index is showing the ralationship between the FLH, measuring the height of the peak visible at 761 nm, and the NDVI and the GLI. No relationship between the size of the anomaly and those radiometric indices can been seen from the data acquired on site H. No matter the biomass, and no matter the greenness of leaves, the peak at 761 nm can be more or less pronounced.
-
-```{r LH vs NDVI}
-#| label: fig-LH_Index
-#| fig-cap: Relationship between the Fluorescence Line Height (FLH) and radiometric indices. The Normalised difference vegetation index is a proxy of the biomass while the Green Leaf Index is a proxy of leaves greenness. 
+```{r hyperspectral NDVI_ABiomass}
+#| label: fig-hyperspectral_NDVI_ABiomass
+#| fig-cap: Relationship between the NDVI of hyperspectral measurement and the dryweight of above ground biomass of seagrass sampled in zone H.
 #| echo: false
 #| error: false
 #| message: false
 #| warning: false
 #| out-width: "95%"
+#| fig-height: 9
+#| fig-width: 6
 
 library(dplyr)
 library(purrr)
+library(broom)
+library(ggplot2)
+library(minpack.lm)
+library(patchwork)
 
-df_sp <- read.delim("data/spectra/20250911_Bourgneuf_H_stations_reflectance.txt") %>% 
+Core_Diameter <- 15 ### diameter of the core used for sampling (in cm)
+
+core_area <- pi*((Core_Diameter/2)^2) #### Area of the core
+
+correction_factor <- (100*100)/core_area #### Correction factor to convert the dry weight to g/m²
+
+dryweight <- readxl::read_xlsx("data/DryWeight_Cores.xlsx") %>% 
+  mutate(A = A*correction_factor,
+         B = B*correction_factor, 
+         Area = substr(Station,1,1))
+
+df_NDVI <- read.delim("data/spectra/20250911_Bourgneuf_H_stations_reflectance.txt") %>% 
   pivot_longer(-Wavelength, names_to = "spectra", values_to = "ref") %>% 
   mutate(spectra = substr(spectra, 1,3)) %>% 
   group_by(Wavelength, spectra) %>% 
-  reframe(ref_mean = mean(ref, na.rm = T),
-          sd = sd(ref)) 
+  reframe(ref_mean = mean(ref, na.rm = TRUE),
+          sd = sd(ref)) %>% 
+  ungroup() %>% 
+  mutate(spectra = gsub("H","H_",spectra)) %>% 
+  dplyr::filter(Wavelength > 400,
+                Wavelength < 900) %>% 
+  group_by(spectra) %>% 
+  reframe(
+    RED = ref_mean[which.min(abs(Wavelength - 670))],
+    NIR = ref_mean[which.min(abs(Wavelength - 800))],
+    NDVI = (NIR - RED) / (NIR + RED)
+  ) %>% 
+  left_join(dryweight, by = c("spectra" = "Station")) %>% 
+  dplyr::select(-c(Area,NIR,RED))
 
 
-# --- Target wavelengths ---
-l1 <- 757; l2 <- 761; l3 <- 769
-wl_red <- 670; wl_nir <- 800
-wl_green <- 550; wl_blue <- 450
+#--- Data (ensure finite, drop NAs) ---
+dat <- df_NDVI %>%
+  select(NDVI, A) %>%
+  filter(is.finite(NDVI), is.finite(A))
 
-# --- Indices per spectrum (with linear interpolation) ---
-indices <- df_sp %>% 
-  arrange(spectra, Wavelength) %>%
-  group_by(spectra) %>%
-  summarise(
-    R757  = approx(Wavelength, ref_mean, xout = l1,      rule = 2)$y,
-    R761  = approx(Wavelength, ref_mean, xout = l2,      rule = 2)$y,
-    R769  = approx(Wavelength, ref_mean, xout = l3,      rule = 2)$y,
-    Rred  = approx(Wavelength, ref_mean, xout = wl_red,  rule = 2)$y,
-    Rnir  = approx(Wavelength, ref_mean, xout = wl_nir,  rule = 2)$y,
-    Rgrn  = approx(Wavelength, ref_mean, xout = wl_green,rule = 2)$y,
-    Rblue = approx(Wavelength, ref_mean, xout = wl_blue, rule = 2)$y,
-    .groups = "drop"
-  ) %>%
-  mutate(
-    # FLH at 761 nm
-    FLH  = R761 - ( ((l3 - l2) / (l3 - l1)) * (R757 - R769) + R769 ),
-    # NDVI (NIR 800 / Red 670)
-    NDVI = (Rnir - Rred) / (Rnir + Rred),
-    # GLI (Green Leaf Index)
-    GLI  = (2*Rgrn - Rred - Rblue) / (2*Rgrn + Rred + Rblue)
-  )
+# --- helpers ---
+metrics <- function(y, yhat) {
+  sse <- sum((y - yhat)^2)
+  sst <- sum((y - mean(y))^2)
+  tibble(R2 = 1 - sse/sst, RMSE = sqrt(mean((y - yhat)^2)))
+}
+smear_factor <- function(resid) exp(0.5 * stats::var(resid))
 
-# --- Long form for faceting: NDVI vs FLH and GLI vs FLH ---
-plot_df <- indices %>%
-  select(spectra, FLH, NDVI, GLI) %>%
-  tidyr::pivot_longer(c(NDVI, GLI), names_to = "Index", values_to = "Value") %>%
-  mutate(Index = factor(Index, levels = c("NDVI","GLI"))) %>%
-  arrange(Index, FLH)
+# prediction grid
+ndvi_seq <- tibble(NDVI = seq(min(dat$NDVI, na.rm = TRUE),
+                              max(dat$NDVI, na.rm = TRUE), length.out = 200))
 
-# --- Interactive, facetted plot ---
-p <- ggplot(plot_df, aes(x = FLH, y = Value)) +
-  geom_smooth(method = "lm", formula = y ~ x, se = TRUE, linewidth = 1, color = "grey30") +
-  geom_point_interactive(
-    aes(
-      tooltip = paste0(
-        "Sample: ", spectra, "\n",
-        "FLH: ", number(FLH, accuracy = 0.00001), "\n",
-        Index, ": ", number(Value, accuracy = 0.003)
-      ),
-      data_id = spectra
-    ),
-    size = 2.4, alpha = 0.85
-  ) +
-  facet_wrap(~ Index, ncol = 2, scales = "free") +
-  labs(
-    title = "Relationships of NDVI and GLI with FLH",
-    x = "FLH",
-    y = "Index value"
-  ) +
-  theme_minimal(base_size = 14) +
-  theme(
-    legend.position = "none",
-    strip.text = element_text(size = 13, face = "bold"),
-    axis.title = element_text(size = 13, face = "bold"),
-    panel.grid.minor = element_blank()
-  )
-
-girafe(
-  ggobj = p,
-  width_svg = 9, height_svg = 5,
-  options = list(
-    opts_tooltip(css = "background:rgba(0,0,0,.9); color:#fff; padding:6px 8px; border-radius:4px;"),
-    opts_hover(css = "r:4pt; stroke:#222; stroke-width:1.5px;"),
-    opts_hover_inv(css = "opacity:0.25;")
+# ---- Model specs: fit, predict (original scale), label ----
+specs <- list(
+  linear = list(
+    label = "Linear (A ~ NDVI)",
+    fit = function(d) lm(A ~ NDVI, data = d),
+    pred = function(fit, newd) tibble(A_hat = as.numeric(predict(fit, newd))),
+    eq  = function(fit) {
+      b <- coef(fit); sprintf("A = %.3f + %.3f·NDVI", b[1], b[2])
+    }
+  ),
+  quadratic = list(
+    label = "Quadratic (A ~ NDVI + NDVI^2)",
+    fit = function(d) lm(A ~ poly(NDVI, 2, raw = TRUE), data = d),
+    pred = function(fit, newd) tibble(A_hat = as.numeric(predict(fit, newd))),
+    eq  = function(fit) {
+      b <- coef(fit); sprintf("A = %.3f + %.3f·NDVI + %.3f·NDVI²", b[1], b[2], b[3])
+    }
+  ),
+  log_linear = list(
+    label = "Log-linear (A ~ log(NDVI))",
+    fit = function(d) { d2 <- d %>% filter(NDVI > 0); lm(A ~ log(NDVI), data = d2) },
+    pred = function(fit, newd) {
+      newd2 <- newd %>% mutate(NDVI = pmax(NDVI, .Machine$double.eps))
+      tibble(A_hat = as.numeric(predict(fit, newd2)))
+    },
+    eq  = function(fit) { b <- coef(fit); sprintf("A = %.3f + %.3f·log(NDVI)", b[1], b[2]) }
+  ),
+  exponential = list(
+    label = "Exponential (A = a·e^{b·NDVI})",
+    fit = function(d) { d2 <- d %>% filter(A > 0); lm(log(A) ~ NDVI, data = d2) },
+    pred = function(fit, newd) {
+      sf <- smear_factor(residuals(fit))
+      tibble(A_hat = as.numeric(exp(predict(fit, newd)) * sf))
+    },
+    eq  = function(fit) {
+      b <- coef(fit); sprintf("A = %.3f·e^{%.3f·NDVI}", exp(b[1]), b[2])
+    }
+  ),
+  power = list(
+    label = "Power (A = a·NDVI^b)",
+    fit = function(d) { d2 <- d %>% filter(A > 0, NDVI > 0); lm(log(A) ~ log(NDVI), data = d2) },
+    pred = function(fit, newd) {
+      newd2 <- newd %>% mutate(NDVI = pmax(NDVI, .Machine$double.eps))
+      sf <- smear_factor(residuals(fit))
+      tibble(A_hat = as.numeric(exp(predict(fit, newd2)) * sf))
+    },
+    eq  = function(fit) {
+      b <- coef(fit); sprintf("A = %.3f·NDVI^{%.3f}", exp(b[1]), b[2])
+    }
   )
 )
+
+# ---- Bootstrap CI function (shared) ----
+bootstrap_ci <- function(spec, d, newd, B = 400, conf = 0.95, seed = 123) {
+  set.seed(seed)
+  fit0  <- spec$fit(d)
+  pred0 <- spec$pred(fit0, newd) %>% pull(A_hat)
+  obs_hat <- spec$pred(fit0, d) %>% pull(A_hat)
+  stats0  <- metrics(d$A, obs_hat)
+
+  P <- matrix(NA_real_, nrow = nrow(newd), ncol = B)
+  b <- 1
+  while (b <= B) {
+    idx <- sample(seq_len(nrow(d)), replace = TRUE)
+    db  <- d[idx, , drop = FALSE]
+    fb  <- try(spec$fit(db), silent = TRUE)
+    if (inherits(fb, "try-error")) next
+    pb  <- try(spec$pred(fb, newd) %>% pull(A_hat), silent = TRUE)
+    if (inherits(pb, "try-error") || any(!is.finite(pb))) next
+    P[, b] <- pb
+    b <- b + 1
+  }
+  alpha <- (1 - conf) / 2
+  lwr <- apply(P, 1, quantile, probs = alpha, na.rm = TRUE)
+  upr <- apply(P, 1, quantile, probs = 1 - alpha, na.rm = TRUE)
+
+  list(fit = fit0,
+       grid = bind_cols(newd, tibble(A_hat = pred0, lwr = lwr, upr = upr)),
+       stats = stats0)
+}
+
+# ---- Run the 5 models ----
+results_list <- purrr::imap(specs, function(spec, key) {
+  res <- bootstrap_ci(spec, dat, ndvi_seq, B = 400, conf = 0.95, seed = 42)
+  list(
+    key   = key,
+    label = spec$label,
+    fit   = res$fit,
+    grid  = res$grid,
+    eq    = specs[[key]]$eq(res$fit),
+    stats = res$stats
+  )
+})
+
+# ---- Build one plot per model ----
+make_panel <- function(res) {
+  eq_text  <- res$eq
+  r2_text  <- sprintf("R² = %.3f | RMSE = %.2f", res$stats$R2, res$stats$RMSE)
+  # lbl_text <- paste(eq_text, r2_text, sep = "\n")
+  lbl_text = r2_text
+
+  ggplot() +
+    geom_point(data = dat, aes(NDVI, A), alpha = 0.8) +
+    geom_ribbon(data = res$grid, aes(NDVI, ymin = lwr, ymax = upr), alpha = 0.2) +
+    geom_line(data = res$grid, aes(NDVI, A_hat), linewidth = 1) +
+    labs(title = res$label, x = "NDVI", y = "Above ground biomass (g/m²)") +
+    annotate("text", x = 0.15, y = Inf, hjust = 0, vjust = 1.2,
+             label = lbl_text, size = 3) +
+    theme_minimal(base_size = 8)+
+    theme(plot.title = element_text(size = 10))
+}
+
+panels <- lapply(results_list, make_panel)
+
+# ---- Patchwork layout for 5 panels ----
+wrap_plots(panels, ncol = 2)
+
 ```
 
-To estimate, for each spectrum, how long the instrument had been running at the time of acquisition, we extracted the capture time of the corresponding photo-quadrat from the images’ EXIF metadata. Because the photo-quadrats were taken a few minutes before the hyperspectral measurements, their timestamps provide a close proxy for the acquisition time; aligning these timestamps with the instrument start time yields the elapsed operating time for each spectrum. Sample H_01 was acquired first. By convention, we set its instrument run time to 0 (min), and the run time for all subsequent samples is expressed relative to H_01—that is, as the difference between each sample’s acquisition timestamp and that of H_01.
+$$ \begin{flalign*} \text{Linear: } & \quad Above = -19.952 + 185.677 \cdot \mathrm{NDVI} && \\[6pt] \textcolor{BurntOrange}{\text{Quadratic: }} & \quad Above = -0.643 + 83.650 \cdot \mathrm{NDVI} + 120.532 \cdot \mathrm{NDVI}^{2} && \\[6pt] \text{Log-linear: } & \quad Above = 121.622 + 67.956 \cdot \log(\mathrm{NDVI}) && \\[6pt] \text{Exponential: } & \quad Above = 9.784 \cdot e^{\,3.796 \cdot \mathrm{NDVI}} && \\[6pt] \text{Power law: } & \quad Above = 187.326 \cdot \mathrm{NDVI}^{1.457} && \end{flalign*} $$
 
-```{r Running_Time vs FLH}
-#| label: fig-LH_runningtime
-#| fig-cap: Relationship between the Fluorescence Line Height (FLH) and the amount of time the ASD Specfield Handheld 2 has been running. 
+The results, summarized in @fig-hyperspectral_NDVI_ABiomass, show that the quadratic model provided the best fits, with R² values around 0.657 and lowest RMSE compared to the other formulations, indicating that NDVI is a reliable predictor of above-ground seagrass biomass in this meadow.
+ 
+## Below ground biomass
+
+The relationships between NDVI and below-ground seagrass biomass were generally weaker than those observed for above-ground biomass. Across all functional forms tested (linear, quadratic, log-linear, exponential, and power law), the models explained less variance, with R² values ranging between 0.42 and 0.46 and RMSE around 21 g·m² (@fig-hyperspectral_NDVI_BBiomass). In comparison, the best above-ground models (quadratic and power law) reached R² values of about 0.65 and lower RMSE (~18 g·m²), highlighting a stronger predictive capacity of NDVI for the photosynthetic canopy than for the rhizome and root fraction. Among the below-ground fits, the quadratic and power law formulations again performed slightly better than the others, but improvements over the linear model were marginal. These results confirm that NDVI is more sensitive to variations in above-ground biomass, which directly affect canopy reflectance, whereas below-ground biomass shows only weak indirect correlations with spectral indices derived from hyperspectral measurements.
+
+```{r hyperspectral NDVI_BBiomass}
+#| label: fig-hyperspectral_NDVI_BBiomass
+#| fig-cap: Relationship between the NDVI of hyperspectral measurement and the dryweight of below ground biomass of seagrass sampled in zone H.
 #| echo: false
+#| error: false
+#| message: false
+#| warning: false
+#| out-width: "95%"
+#| fig-height: 9
+#| fig-width: 6
+
+library(dplyr)
+library(purrr)
+library(broom)
+library(ggplot2)
+library(minpack.lm)
+library(patchwork)
+
+Core_Diameter <- 15 ### diameter of the core used for sampling (in cm)
+
+core_area <- pi*((Core_Diameter/2)^2) #### Area of the core
+
+correction_factor <- (100*100)/core_area #### Correction factor to convert the dry weight to g/m²
+
+dryweight <- readxl::read_xlsx("data/DryWeight_Cores.xlsx") %>% 
+  mutate(A = A*correction_factor,
+         B = B*correction_factor, 
+         Area = substr(Station,1,1))
+
+df_NDVI <- read.delim("data/spectra/20250911_Bourgneuf_H_stations_reflectance.txt") %>% 
+  pivot_longer(-Wavelength, names_to = "spectra", values_to = "ref") %>% 
+  mutate(spectra = substr(spectra, 1,3)) %>% 
+  group_by(Wavelength, spectra) %>% 
+  reframe(ref_mean = mean(ref, na.rm = TRUE),
+          sd = sd(ref)) %>% 
+  ungroup() %>% 
+  mutate(spectra = gsub("H","H_",spectra)) %>% 
+  dplyr::filter(Wavelength > 400,
+                Wavelength < 900) %>% 
+  group_by(spectra) %>% 
+  reframe(
+    RED = ref_mean[which.min(abs(Wavelength - 670))],
+    NIR = ref_mean[which.min(abs(Wavelength - 800))],
+    NDVI = (NIR - RED) / (NIR + RED)
+  ) %>% 
+  left_join(dryweight, by = c("spectra" = "Station")) %>% 
+  dplyr::select(-c(Area,NIR,RED))
+
+
+#--- Data (ensure finite, drop NAs) ---
+dat <- df_NDVI %>%
+  select(NDVI, B) %>%
+  filter(is.finite(NDVI), is.finite(B)) %>% 
+  rename(Below = "B")
+
+# --- helpers ---
+metrics <- function(y, yhat) {
+  sse <- sum((y - yhat)^2)
+  sst <- sum((y - mean(y))^2)
+  tibble(R2 = 1 - sse/sst, RMSE = sqrt(mean((y - yhat)^2)))
+}
+smear_factor <- function(resid) exp(0.5 * stats::var(resid))
+
+# prediction grid
+ndvi_seq <- tibble(NDVI = seq(min(dat$NDVI, na.rm = TRUE),
+                              max(dat$NDVI, na.rm = TRUE), length.out = 200))
+
+# ---- Model specs: fit, predict (original scale), label ----
+specs <- list(
+  linear = list(
+    label = "Linear (Below ~ NDVI)",
+    fit = function(d) lm(Below ~ NDVI, data = d),
+    pred = function(fit, newd) tibble(Below_hat = as.numeric(predict(fit, newd))),
+    eq  = function(fit) {
+      b <- coef(fit); sprintf("Below = %.3f + %.3f·NDVI", b[1], b[2])
+    }
+  ),
+  quadratic = list(
+    label = "Quadratic (Below ~ NDVI + NDVI^2)",
+    fit = function(d) lm(Below ~ poly(NDVI, 2, raw = TRUE), data = d),
+    pred = function(fit, newd) tibble(Below_hat = as.numeric(predict(fit, newd))),
+    eq  = function(fit) {
+      b <- coef(fit); sprintf("Below = %.3f + %.3f·NDVI + %.3f·NDVI²", b[1], b[2], b[3])
+    }
+  ),
+  log_linear = list(
+    label = "Log-linear (Below ~ log(NDVI))",
+    fit = function(d) { d2 <- d %>% filter(NDVI > 0); lm(Below ~ log(NDVI), data = d2) },
+    pred = function(fit, newd) {
+      newd2 <- newd %>% mutate(NDVI = pmax(NDVI, .Machine$double.eps))
+      tibble(Below_hat = as.numeric(predict(fit, newd2)))
+    },
+    eq  = function(fit) { b <- coef(fit); sprintf("Below = %.3f + %.3f·log(NDVI)", b[1], b[2]) }
+  ),
+  exponential = list(
+    label = "Exponential (Below = a·e^{b·NDVI})",
+    fit = function(d) { d2 <- d %>% filter(Below > 0); lm(log(Below) ~ NDVI, data = d2) },
+    pred = function(fit, newd) {
+      sf <- smear_factor(residuals(fit))
+      tibble(Below_hat = as.numeric(exp(predict(fit, newd)) * sf))
+    },
+    eq  = function(fit) {
+      b <- coef(fit); sprintf("Below = %.3f·e^{%.3f·NDVI}", exp(b[1]), b[2])
+    }
+  ),
+  power = list(
+    label = "Power (Below = a·NDVI^b)",
+    fit = function(d) { d2 <- d %>% filter(Below > 0, NDVI > 0); lm(log(Below) ~ log(NDVI), data = d2) },
+    pred = function(fit, newd) {
+      newd2 <- newd %>% mutate(NDVI = pmax(NDVI, .Machine$double.eps))
+      sf <- smear_factor(residuals(fit))
+      tibble(Below_hat = as.numeric(exp(predict(fit, newd2)) * sf))
+    },
+    eq  = function(fit) {
+      b <- coef(fit); sprintf("Below = %.3f·NDVI^{%.3f}", exp(b[1]), b[2])
+    }
+  )
+)
+
+# ---- Bootstrap CI function (shared) ----
+bootstrap_ci <- function(spec, d, newd, B = 400, conf = 0.95, seed = 123) {
+  set.seed(seed)
+  fit0  <- spec$fit(d)
+  pred0 <- spec$pred(fit0, newd) %>% pull(Below_hat)
+  obs_hat <- spec$pred(fit0, d) %>% pull(Below_hat)
+  stats0  <- metrics(d$Below, obs_hat)
+
+  P <- matrix(NA_real_, nrow = nrow(newd), ncol = B)
+  b <- 1
+  while (b <= B) {
+    idx <- sample(seq_len(nrow(d)), replace = TRUE)
+    db  <- d[idx, , drop = FALSE]
+    fb  <- try(spec$fit(db), silent = TRUE)
+    if (inherits(fb, "try-error")) next
+    pb  <- try(spec$pred(fb, newd) %>% pull(Below_hat), silent = TRUE)
+    if (inherits(pb, "try-error") || any(!is.finite(pb))) next
+    P[, b] <- pb
+    b <- b + 1
+  }
+  alpha <- (1 - conf) / 2
+  lwr <- apply(P, 1, quantile, probs = alpha, na.rm = TRUE)
+  upr <- apply(P, 1, quantile, probs = 1 - alpha, na.rm = TRUE)
+
+  list(fit = fit0,
+       grid = bind_cols(newd, tibble(Below_hat = pred0, lwr = lwr, upr = upr)),
+       stats = stats0)
+}
+
+# ---- Run the 5 models ----
+results_list <- purrr::imap(specs, function(spec, key) {
+  res <- bootstrap_ci(spec, dat, ndvi_seq, B = 400, conf = 0.95, seed = 42)
+  list(
+    key   = key,
+    label = spec$label,
+    fit   = res$fit,
+    grid  = res$grid,
+    eq    = specs[[key]]$eq(res$fit),
+    stats = res$stats
+  )
+})
+
+# ---- Build one plot per model ----
+make_panel <- function(res) {
+  eq_text  <- res$eq
+  r2_text  <- sprintf("R² = %.3f | RMSE = %.2f", res$stats$R2, res$stats$RMSE)
+  # lbl_text <- paste(eq_text, r2_text, sep = "\n")
+  lbl_text = r2_text
+
+  ggplot() +
+    geom_point(data = dat, aes(NDVI, Below), alpha = 0.8) +
+    geom_ribbon(data = res$grid, aes(NDVI, ymin = lwr, ymax = upr), alpha = 0.2) +
+    geom_line(data = res$grid, aes(NDVI, Below_hat), linewidth = 1) +
+    labs(title = res$label, x = "NDVI", y = "Below ground biomass (g/m²)") +
+    annotate("text", x = 0.15, y = Inf, hjust = 0, vjust = 1.2,
+             label = lbl_text, size = 3) +
+    theme_minimal(base_size = 8)+
+    theme(plot.title = element_text(size = 10))
+}
+
+panels <- lapply(results_list, make_panel)
+
+# ---- Patchwork layout for 5 panels ----
+wrap_plots(panels, ncol = 2)
+
+```
+
+$$
+\begin{flalign*}
+\text{Linear: } & \quad Below = -14.984 + 141.623 \cdot \mathrm{NDVI} && \\[6pt]
+\textcolor{BurntOrange}{\text{Quadratic: }} & \quad Below = 4.189 + 84.580 \cdot \mathrm{NDVI} + 67.389 \cdot \mathrm{NDVI}^{2} && \\[6pt]
+\text{Log-linear: } & \quad Below = 93.009 + 51.843 \cdot \log(\mathrm{NDVI}) && \\[6pt]
+\text{Exponential: } & \quad Below = 7.937 \cdot e^{\,3.553 \cdot \mathrm{NDVI}} && \\[6pt]
+\text{Power law: } & \quad Below = 124.392 \cdot \mathrm{NDVI}^{1.350} &&
+\end{flalign*}
+$$
+
+For both the modeling of the above ground and the below ground biomass the **quadratic** relationship will be used for the rest of the analysis. 
+
+## Mapping the biomass of seagrass across the meadow. 
+
+Using the relationship found in @fig-hyperspectral_NDVI_ABiomass and @fig-hyperspectral_NDVI_BBiomass, the biomass of seagrass can be estimated from the NDVI at the scale of the entire mudflat. 
+
+```{r mapping biomass from NDVI}
+#| label: fig-Map_Biomass
+#| fig-cap: Map of Above ground Biomass (Left) and Below ground biomass (right) of the seagrass *Zostera noltei* across the entire meadow
+#| echo: false
+#| eval: true
 #| error: false
 #| message: false
 #| warning: false
 #| cache: false
 #| out-width: "95%"
-
-library(exiftoolr)
-library(tidyverse)
-
-files <- list.files("data/imgs/RAW_H", pattern = "\\.(jpe?g|tif?f)$", full.names = TRUE)
-
-j <- exif_read(files[1])$ModifyDate
-
-
-df_acquisition <- map_df(files, function(f) {
-  x <- exif_read(f, tags = "ModifyDate")
-  tibble(
-    file               = f,
-    AcquisitionDate    = x$ModifyDate
-  )
-}) %>% 
-  mutate(AcquisitionDate = as.POSIXct(AcquisitionDate, format = "%Y:%m:%d %H:%M:%OS"),
-         filename = gsub(".*/","",file),
-         sample = substr(filename,1,4))
-
-initial_date <- df_acquisition %>% 
-  dplyr::filter(sample == "H_01") %>% 
-  pull(AcquisitionDate)
-
-df_acquisition <- df_acquisition %>% 
-  mutate(running_time = AcquisitionDate - initial_date) %>% 
-  left_join(indices %>%
-              select(spectra, FLH, NDVI, GLI) %>% 
-              mutate(spectra = gsub("H","H_",spectra)), by = c("sample" = "spectra"))
-
-p <- ggplot(df_acquisition, aes(x = running_time, y = FLH)) +
-  geom_smooth(method = "lm", formula = y ~ x, se = TRUE, linewidth = 1, color = "grey30") +
-  geom_point_interactive(
-    aes(tooltip = sample, data_id = sample),
-    size = 2.6, alpha = 0.85
-  ) +
-  labs(
-    title = "FLH vs. instrument running time",
-    x = "Instrument running time (seconds)",
-    y = "FLH"
-  ) +
-  ylim(c(-0.004,0.008))+
-  theme_minimal(base_size = 14) +
-  theme(
-    legend.position = "none",
-    strip.text = element_text(size = 13, face = "bold"),
-    axis.title = element_text(size = 13, face = "bold"),
-    panel.grid.minor = element_blank()
-  )
-
-girafe(
-  ggobj = p,
-  width_svg = 9, height_svg = 5,
-  options = list(
-    opts_tooltip(css = "background:rgba(0,0,0,.9); color:#fff; padding:6px 8px; border-radius:4px;"),
-    opts_hover(css = "r:4pt; stroke:#222; stroke-width:1.5px;"),
-    opts_hover_inv(css = "opacity:0.25;")
-  )
-)
-
-```
-
-@fig-LH_runningtime shows the relationship between ASD run time and the fluorescence line height at 761 nm (FLH). Sample H_01 was acquired immediately after startup (T0), and the last sample in the sequence, H_08, was collected 7,316 s (≈ 122 min) after T0. A negative linear trend can be seen (grey 95% CI shown): FLH values are highest at the beginning of the session and decline as the instrument continues to run, with several late measurements approaching zero or slightly negative values.
-
-## Radiometric indices vs Biomass
-
-```{r find the index the most linked with above ground biomass}
-#| echo: false
-#| error: false
-#| message: false
-#| warning: false
-#| eval: false
-
-library(dplyr)
-library(tidyr)
-library(purrr)
-library(broom)
-
-
-Core_Diameter <- 15
-core_area <- pi * ((Core_Diameter/2)^2)
-correction_factor <- (100*100)/core_area
-
-dryweight <- readxl::read_xlsx("data/DryWeight_Cores.xlsx") %>% 
-  mutate(A = A * correction_factor,
-         B = B * correction_factor)
-# ---- Step 1: Define helper for index calculation ----
-compute_indices <- function(df, 
-                            wl_red = 670, wl_nir = 800, 
-                            wl_blue = 450, wl_green = 550, 
-                            wl_rededge = 705, wl_445 = 445, wl_750 = 750) {
-  
-  # interpolate reflectances
-  red   <- approx(df$Wavelength, df$ref_mean, xout = wl_red)$y
-  nir   <- approx(df$Wavelength, df$ref_mean, xout = wl_nir)$y
-  blue  <- approx(df$Wavelength, df$ref_mean, xout = wl_blue)$y
-  green <- approx(df$Wavelength, df$ref_mean, xout = wl_green)$y
-  re    <- approx(df$Wavelength, df$ref_mean, xout = wl_rededge)$y
-  r445  <- approx(df$Wavelength, df$ref_mean, xout = wl_445)$y
-  r750  <- approx(df$Wavelength, df$ref_mean, xout = wl_750)$y
-  
-  tibble(
-    # Classic indices
-    NDVI   = (nir - red) / (nir + red),
-    SR     = nir / red,
-    MSR    = (nir/red - 1) / sqrt(nir/red + 1),
-    DVI    = nir - red,
-    RVI    = red / nir,
-    
-    # Soil/structure corrected
-    SAVI   = 1.5 * (nir - red) / (nir + red + 0.5),
-    OSAVI  = 1.16 * (nir - red) / (nir + red + 0.16),
-    TSAVI  = (0.08 * (nir - 0.5*red - 0.08)) / (red + 0.5*nir + 0.08),
-    
-    # Atmosphere resistant
-    EVI    = 2.5 * (nir - red) / (nir + 6*red - 7.5*blue + 1),
-    EVI2   = 2.5 * (nir - red) / (nir + 2.4*red + 1),
-    
-    # Greenness indices
-    GNDVI  = (nir - green) / (nir + green),
-    VARI   = (green - red) / (green + red - blue),
-    CIG    = (nir / green) - 1,   # chlorophyll index green
-    CIRE   = (nir / re) - 1,      # chlorophyll index red edge
-    
-    # Red edge indices
-    NDRE   = (nir - re) / (nir + re),
-    
-    # Other spectral indices
-    MTVI2  = (1.5 * (1.2*(nir - green) - 2.5*(red - green))) / sqrt((2*nir + 1)^2 - (6*nir - 5*sqrt(red)) - 0.5),
-    MCARI  = ((re - red) - 0.2*(re - green)) * (re/red),
-    
-    # Pigment indices
-    PRI    = (green - re) / (green + re),
-    SIPI   = (nir - blue) / (nir - red),
-    
-    # Simple phenology-related
-    NDWI   = (nir - green) / (nir + green),   # often used for water content
-    ARVI   = (nir - (2*red - blue)) / (nir + (2*red - blue)),
-    
-    # --- New index ---
-    mND705 = (r750 - re) / (r750 + re - 2 * r445)
-  )
-}
-
-
-
-# ---- Step 2: Apply to each spectrum ----
-# Suppose `spectra_df` has columns: Spectra, Wavelength, Reflectance
-# and `biomass_df` has columns: Spectra, A (above-ground biomass)
-
-indices_df <- df_sp %>%
-  group_by(spectra) %>%
-  group_modify(~ compute_indices(.x)) %>%
-  ungroup()
-
-# ---- Step 3: Join with biomass ----
-data_all <- indices_df %>%
-  mutate(spectra = gsub("H","H_",spectra)) %>% 
-  left_join(dryweight, by = c("spectra" = "Station"))
-
-
-# ---- Step 4: Correlate each index with biomass ----
-results <- data_all %>%
-  pivot_longer(cols = -c(spectra,A,B), names_to = "Index", values_to = "Value") %>%
-  group_by(Index) %>%
-  summarise(
-    model = list(lm((A) ~ Value, data = cur_data())),
-    .groups = "drop"
-  ) %>%
-  mutate(
-    glance = map(model, broom::glance)
-  ) %>%
-  unnest(glance) %>%
-  arrange(desc(r.squared)) %>%
-  select(Index, r.squared, adj.r.squared, p.value)
-
-print(results)
-
-
-```
-
-From those spectral signatures, a range of spectral indices were tested to identify the one with the strongest relationship to above-ground biomass. All the indices listed below were evaluated, but only the results for the best-performing index and the NDVI are shown. 
-
-$$
-\begin{aligned}
-\text{NDVI}   &= \frac{R_{NIR} - R_{Red}}{R_{NIR} + R_{Red}}       &\quad
-\text{GNDVI}  &= \frac{R_{NIR} - R_{Green}}{R_{NIR} + R_{Green}} \\[6pt]
-\text{SR}     &= \frac{R_{NIR}}{R_{Red}}                           &\quad
-\text{VARI}   &= \frac{R_{Green} - R_{Red}}{R_{Green} + R_{Red} - R_{Blue}} \\[6pt]
-\text{MSR}    &= \frac{\tfrac{R_{NIR}}{R_{Red}} - 1}{\sqrt{\tfrac{R_{NIR}}{R_{Red}} + 1}} &\quad
-\text{CIG}    &= \frac{R_{NIR}}{R_{Green}} - 1 \\[6pt]
-\text{DVI}    &= R_{NIR} - R_{Red}                                  &\quad
-\text{CIRE}   &= \frac{R_{NIR}}{R_{RE}} - 1 \\[6pt]
-\text{RVI}    &= \frac{R_{Red}}{R_{NIR}}                            &\quad
-\text{NDRE}   &= \frac{R_{NIR} - R_{RE}}{R_{NIR} + R_{RE}} \\[6pt]
-\text{SAVI}   &= \frac{1.5 \, (R_{NIR} - R_{Red})}{R_{NIR} + R_{Red} + 0.5} &\quad
-\text{MTVI2}  &= \frac{1.5 \left[ 1.2(R_{NIR} - R_{Green}) - 2.5(R_{Red} - R_{Green}) \right]}
-{\sqrt{(2R_{NIR}+1)^2 - (6R_{NIR} - 5\sqrt{R_{Red}}) - 0.5}} \\[6pt]
-\text{OSAVI}  &= \frac{1.16 \, (R_{NIR} - R_{Red})}{R_{NIR} + R_{Red} + 0.16} &\quad
-\text{MCARI}  &= \left[(R_{RE} - R_{Red}) - 0.2(R_{RE} - R_{Green})\right] \frac{R_{RE}}{R_{Red}} \\[6pt]
-\text{TSAVI}  &= \frac{0.08 \, (R_{NIR} - 0.5R_{Red} - 0.08)}{R_{Red} + 0.5R_{NIR} + 0.08} &\quad
-\text{PRI}    &= \frac{R_{Green} - R_{RE}}{R_{Green} + R_{RE}} \\[6pt]
-\text{EVI}    &= \frac{2.5 \, (R_{NIR} - R_{Red})}{R_{NIR} + 6R_{Red} - 7.5R_{Blue} + 1} &\quad
-\text{SIPI}   &= \frac{R_{NIR} - R_{Blue}}{R_{NIR} - R_{Red}} \\[6pt]
-\text{EVI2}   &= \frac{2.5 \, (R_{NIR} - R_{Red})}{R_{NIR} + 2.4R_{Red} + 1} &\quad
-\text{NDWI}   &= \frac{R_{NIR} - R_{Green}}{R_{NIR} + R_{Green}} \\[6pt]
-\text{mND705} &= \frac{R_{750} - R_{705}}{R_{750} + R_{705} - 2R_{445}} &\quad &
-\end{aligned}
-$$
-
-The index with the highest R² against above-ground biomass is NDRE. NDRE is analogous to NDVI but replaces the red band (~665 nm) with a red-edge band (typically ~705 nm):
-The advantage is reduced saturation at high biomass. Around 665 nm, chlorophyll-a absorption quickly reaches an asymptote, so reflectance in the red band changes little as biomass increases and NDVI tends to plateau. In the red-edge region, however, reflectance remains sensitive: as biomass/chlorophyll increases, reflectance near ~705 nm continues to decrease (with a concomitant shift of the red-edge to longer wavelengths). Consequently, NDRE preserves sensitivity in dense canopies and correlates more strongly with biomass than NDVI, resulting with an R² square slightly higher than for the NDVI (R²_NDVI = 0.65, R²_NDRE = 0.67)... -_-'
-
-```{r Plot NDVI dryweight}
-#| label: fig-hyperspectral_dryweight
-#| fig-cap: Relationship between the NDRE, the NDVI and the dry weight of seagrasses measured in area H 
-#| echo: false
-#| error: false
-#| message: false
-#| warning: false
-#| out-width: "95%"
-
-library(dplyr)
-library(tidyr)
-library(ggplot2)
-library(ggiraph)
-library(scales)
-
-# --- wavelengths ---
-wl_red  <- 670   # NDVI red
-wl_nir  <- 750   # NDVI/NDRE NIR
-wl_re   <- 705   # red-edge for NDRE
-
-Core_Diameter <- 15
-core_area <- pi * ((Core_Diameter/2)^2)
-correction_factor <- (100*100)/core_area
-
-# --- spectra (as you had) ---
-df_sp <- read.delim("data/spectra/20250911_Bourgneuf_H_stations_reflectance.txt") %>% 
-  pivot_longer(-Wavelength, names_to = "spectra", values_to = "ref") %>% 
-  mutate(spectra = substr(spectra, 1, 3)) %>% 
-  group_by(Wavelength, spectra) %>% 
-  reframe(ref_mean = mean(ref, na.rm = TRUE),
-          sd = sd(ref)) %>% 
-  ungroup() %>% 
-  mutate(spectra = gsub("H","H_", spectra))
-
-# --- NDVI + NDRE per spectrum (linear interpolation to target λ) ---
-indices <- df_sp %>% 
-  arrange(spectra, Wavelength) %>%
-  group_by(spectra) %>%
-  summarise(
-    red = approx(Wavelength, ref_mean, xout = wl_red, rule = 2)$y,
-    re  = approx(Wavelength, ref_mean, xout = wl_re,  rule = 2)$y,
-    nir = approx(Wavelength, ref_mean, xout = wl_nir, rule = 2)$y,
-    NDVI = (nir - red) / (nir + red),
-    NDRE = (nir - re)  / (nir + re),
-    .groups = "drop"
-  )
-
-# --- biomass (convert to g/m²) ---
-dryweight <- readxl::read_xlsx("data/DryWeight_Cores.xlsx") %>% 
-  mutate(A = A * correction_factor,
-         B = B * correction_factor)
-
-# --- prepare data for plotting (Above-ground only) ---
-plot_df <- indices %>% 
-  left_join(dryweight, by = c("spectra" = "Station")) %>% 
-  transmute(
-    spectra,
-    Biomass = A,
-    NDVI, NDRE
-  ) %>% 
-  pivot_longer(c(NDVI, NDRE), names_to = "Index", values_to = "Value") %>% 
-  mutate(Index = factor(Index, levels = c("NDVI","NDRE"))) %>%
-  arrange(Index, Biomass)
-
-# --- interactive two-panel plot (NDVI left, NDRE right) ---
-p <- ggplot(
-  plot_df,
-  aes(x = Biomass, y = Value)
-) +
-  geom_smooth(method = "lm", se = TRUE, alpha = 0.12, linewidth = 1, color = "grey30") +
-  geom_point_interactive(
-    aes(
-      tooltip = paste0(
-        "Sample: ", spectra, "\n",
-        "Biomass: ", number(Biomass, accuracy = 0.01), " g/m²\n",
-        Index, ": ", number(Value, accuracy = 0.003)
-      ),
-      data_id = spectra
-    ),
-    size = 2, alpha = 0.8
-  ) +
-  facet_wrap(~ Index, ncol = 2, scales = "free") +   # NDVI (left) and NDRE (right)
-  labs(
-    x = "Above-ground biomass (g/m²)",
-    y = "Index value"
-  ) +
-  theme_minimal(base_size = 14) +
-  theme(
-    legend.position = "none",
-    strip.text = element_text(size = 13, face = "bold"),
-    axis.title = element_text(size = 14, face = "bold"),
-    panel.grid.minor = element_blank()
-  )
-
-girafe(
-  ggobj = p,
-  width_svg = 9, height_svg = 5,
-  options = list(
-    opts_tooltip(opacity = .95),
-    opts_hover(css = "r:4pt; stroke-width: 2;"),
-    opts_hover_inv(css = "opacity:0.25;")
-  )
-)
-
-```
-
-```{r leafletmap}
-#| fig-cap: Map of Bourgneuf Bay Sampling site
-#| echo: false
-#| error: false
-#| message: false
-#| eval: false
-#| warning: false
-#| out-width: "95%"
+#| fig-height: 9
+#| fig-width: 4 
 
 library(tidyverse)
 library(leaflet)
+library(leafem)          # addMouseCoordinates, addImageQuery
+library(leaflet.extras2) # (optional extra controls)
 library(sf)
-library(leafem)
-library(leaflet.extras2)
 library(terra)
+library(raster)          # for leaflet raster compatibility
+library(RColorBrewer)
+library(leafsync) 
 
-# folder structure: ./www/imgs/...
-img_list <- list.files("data/imgs", recursive = TRUE, full.names = TRUE, pattern = "\\.jpg$") %>%
-  tibble(path = .) %>%
-  mutate(filename = basename(path),
-         station  = substr(filename, 1, 4),
-         url      = paste0(file.path("imgs", filename)))
-
-Points <- sf::st_read("data/shp/Core_Location/Points.shp", quiet = TRUE) %>%
-  left_join(img_list, by = c("Name" = "station")) %>%
-  filter(!is.na(url))
-
-leaflet() %>%
-  setView(lng = -2.176695, lat = 46.962474, zoom = 15) %>%
-  addProviderTiles(providers$Esri.WorldImagery, group = "Imagery",
-                   options = providerTileOptions(minZoom = 8, maxZoom = 20)) %>%
-  addCircleMarkers(
-    data = Points, radius = 2, color = "lightgreen", fillColor = "lightgreen", fillOpacity = 0.8,
-    group = "Coring stations",
-    popup = ~sprintf("<img src='%s' width='400'/>", url),
-    popupOptions = popupOptions(
-    maxWidth  = 450,    # Maximum width of the popup
-    minWidth  = 100,    # Minimum width of the popup
-    maxHeight = 600)
-  ) %>%
-  addLayersControl(overlayGroups = "Coring stations",
-                   options = layersControlOptions(collapsed = FALSE))
+mask <- read_sf("data/shp/Meadow_BB.shp") %>%
+  st_make_valid() %>%
+  st_transform(4326)
 
 
-# htmlwidgets::saveWidget(plot_S2, file="maps/map_Bathy_Quiberon.html", selfcontained = F)
+mask_S2 <- read_sf("data/shp/Meadow_BB.shp") %>%
+  st_make_valid() %>% 
+  st_buffer(-20)  %>%
+  st_transform(4326)
 
+img <- rast("data/S2_Meadow.tif") %>% 
+  project("EPSG:4326") %>% 
+  crop(mask_S2, mask = T) 
+  
+NDVI <- ((img$S2_Meadow_8-1000)-(img$S2_Meadow_4-1000))/((img$S2_Meadow_8-1000)+(img$S2_Meadow_4-1000))
+
+A_Biomass <- -0.643+83.65*NDVI + 120.532*(NDVI*NDVI)
+values(A_Biomass)[values(A_Biomass)<0] <- 0
+
+B_Biomass <- 4.189+84.58*NDVI + 67.389*(NDVI*NDVI)
+values(B_Biomass)[values(B_Biomass)<0] <- 0
+
+rA <- A_Biomass
+rB <- B_Biomass
+
+# palettes (different and non-viridis)
+palA <- colorNumeric(
+  palette = colorRampPalette(brewer.pal(9, "YlOrRd"))(256),
+  domain  = raster::values(rA),
+  na.color = "transparent"
+)
+
+palB <- colorNumeric(
+  palette = colorRampPalette(brewer.pal(9, "PuBuGn"))(256),
+  domain  = raster::values(rB),
+  na.color = "transparent"
+)
+
+# a common view (center on mask)
+ctr <- st_coordinates(st_centroid(st_union(mask))) %>% as.numeric()
+
+# get min and max values for the rasters
+rngA <- range(values(rA), na.rm = TRUE)
+rngB <- range(values(rB), na.rm = TRUE)
+
+# --- Map 1: Above-ground biomass (A) ---
+mA <- leaflet(options = leafletOptions(minZoom = 8, preferCanvas = TRUE)) |>
+  addProviderTiles(providers$Esri.WorldImagery, group = "Imagery") |>
+  setView(lng = ctr[1], lat = ctr[2], zoom = 14) |>
+  # addPolygons(data = mask, color = "#444", weight = 1, fill = FALSE, group = "Meadow") |>
+  addRasterImage(rA, colors = palA, opacity = 0.85, group = "Above ground", project = TRUE) |>
+  addLegend(
+    pal = palA,
+    values = values(rA),
+    title = "Above-ground biomass (g·m²)",
+    position = "bottomright",
+    labFormat = labelFormat(digits = 0),
+    # only show min and max
+    bins = c(rngA[1], rngA[2])
+  ) |>
+  addImageQuery(rA[[1]], project = TRUE, layer = "Above ground", type = "mousemove", digits = 2, prefix = "") |>
+  addScaleBar(position = "bottomleft")
+
+# --- Map 2: Below-ground biomass (B) ---
+rngB <- range(values(rB), na.rm = TRUE)
+
+mB <- leaflet(options = leafletOptions(minZoom = 8, preferCanvas = TRUE)) |>
+  addProviderTiles(providers$Esri.WorldImagery, group = "Imagery") |>
+  setView(lng = ctr[1], lat = ctr[2], zoom = 14) |>
+  # addPolygons(data = mask, color = "#444", weight = 1, fill = FALSE, group = "Meadow") |>
+  addRasterImage(rB, colors = palB, opacity = 0.85, group = "Below ground", project = TRUE) |>
+  addLegend(
+    pal = palB,
+    values = values(rB),
+    title = "Below-ground biomass (g·m²)",
+    position = "bottomright",
+    labFormat = labelFormat(digits = 0),
+    bins = c(rngB[1], rngB[2])  # only min & max
+  ) |>
+  addImageQuery(rB[[1]], project = TRUE, layer = "Below ground",type = "mousemove", digits = 2, prefix = "") |>
+  addScaleBar(position = "bottomleft")
+
+
+# --- Synchronized view (side-by-side) ---
+leafsync::sync(mA, mB)
+
+
+total_Abiomass = A_Biomass %>% 
+  as_tibble() %>% 
+  dplyr::filter(S2_Meadow_8 >0) %>% 
+  reframe(sum = sum(S2_Meadow_8)* 0.1 * 0.001,
+          mean = mean(S2_Meadow_8))
+
+total_Bbiomass = B_Biomass %>% 
+  as_tibble() %>% 
+  dplyr::filter(S2_Meadow_8 >0) %>% 
+  reframe(sum = sum(S2_Meadow_8)* 0.1 * 0.001,
+          mean = mean(S2_Meadow_8))
 ```
 
-# Bivalve diversity & spatial distribution
+@fig-Map_Biomass shows the spatial distribution of above- and below-ground biomass of Zostera noltei across the study site. In total, an estimated **`r round(total_Abiomass$sum,2)` tons** of leaves and **`r round(total_Bbiomass$sum,2)` tons** of roots are present within the study area. The average above ground biomass is `r round(total_Abiomass$mean,2)` g.m² while the below ground biomass averages at `r round(total_Bbiomass$mean,2)` g.m². 
 
-The student quantified the density of all bivalve species present in the sediment while sorting each core, and all taxonomic identifications were subsequently verified by a taxonomist.
+# Bivalves
+
+## Abundance
 
 ```{r Bivalve analysis}
-#| label: fig-BivDensity
+#| label: fig-BivDensity_m2
 #| fig-cap: Average density of each bivalve specie across all 60 cores (Left) and Percentage of core were each species were found (Right). 
 #| echo: false
 #| error: false
@@ -962,13 +972,12 @@ p1 + p2 + plot_layout(widths = c(2, 1))
 
 ```
 
-@fig-BivDensity shows the mean density of each bivalve species across the 60 cores. In total, nine distinct species were identified. The most common was *Scrobicularia plana* (209 individuals per m², on average, present in about 77% of cores), whereas *Ruditapes decussatus* was the least common (0.95 individuals per m²,  present in about 1% of cores).
-
+@fig-BivDensity_m2 shows the mean density of each bivalve species across the 60 cores. In total, nine distinct species were identified. The most common was *Scrobicularia plana* (209 individuals per m², on average, present in about 77% of cores), whereas *Ruditapes decussatus* was the least common (0.95 individuals per m²,  present in about 1% of cores).
 
 ## Bivalve diversity by core
 
 ```{r Shannon index}
-#| label: fig-Biv_diversity
+#| label: fig-Biv_diversity_m2
 #| fig-cap: Interactive lollipop charts of bivalve diversity per core (n = 60). For each core (colored by site), we show Shannon diversity (H′), species richness (S), and Pielou evenness (J′). Metrics were computed from species‐level counts; H′ uses natural logarithms and J′ = H′/ln(S). Lines run from 0 to the core’s value and points mark the estimate; cores with no identified bivalves appear with H′ = 0 and J′ = 0. Hover to see exact values. 
 #| echo: false
 #| error: false
@@ -1070,6 +1079,8 @@ p <- ggplot(long, aes(x = value, y = Core  , color = Site)) +
     size = 3
   ) +
   facet_wrap(~ metric, scales = "free_x", ncol = 3) +
+      scale_color_brewer(palette = "Set2") +   # or "Dark2" for stronger contrast
+
   scale_y_reordered() +
   labs(title = "Bivalve Diversity by Core (interactive)", x = NULL, y = "Core") +
   theme_minimal(base_size = 13) +
@@ -1180,197 +1191,16 @@ girafe(
 # results_bayes
 ```
 
-@fig-Biv_diversity shows per-core diversity for the two areas. Each dot is a core (colored by site) and panels display Shannon diversity (H′), species richness (S), and Pielou evenness (J′). Cores from area H generally sit higher for H′ and S, with less separation for J′.
+@fig-Biv_diversity_m2 shows per-core diversity for the two areas. Each dot is a core (colored by site) and panels display Shannon diversity (H′), species richness (S), and Pielou evenness (J′). Cores from area H generally sit higher for H′ and S, with less separation for J′.
 
-Bayesian comparisons (reported as H–L) back this up.
-Shannon diversity is higher in H: mean difference +0.365 with a 95% credible interval \[0.155, 0.579] and $P(H\!-\!L>0)=1.00$. Very little posterior mass falls within a small ±0.10 ROPE, so the increase is not only credible but also practically meaningful.
-Richness is also higher in H: +1.23 species on average, 95% CrI \[0.17, 2.31], $P>0=0.988$. About one-third of the posterior lies within a ±1 species ROPE, suggesting a positive but modest gain in the number of species per core.
-For evenness, the difference is small and uncertain: +0.116, 95% CrI \[−0.020, 0.247], $P>0=0.956$, with \~15% of the posterior inside a ±0.05 ROPE.
+Bayesian comparisons (reported as H–L) supported these patterns. Shannon diversity was higher in site H, with a mean difference of +0.365 (95% CrI [0.155, 0.579]) and a posterior probability of $P(H\!-\!L>0)=1.00$. Very little posterior mass fell within a ±0.10 region of practical equivalence (ROPE), indicating that the increase was both statistically credible and ecologically meaningful. Species richness was also greater in H, with an average difference of +1.23 species per core (95% CrI \[0.17, 2.31], $P>0=0.988$). Approximately one-third of the posterior distribution lay within a ±1 species ROPE, suggesting a positive but modest gain in richness. In contrast, evenness showed only a small and uncertain difference +0.116 (95% CrI \[−0.020, 0.247], $P>0=0.956$), with \~15% of the posterior mass within a ±0.05 ROPE.
 
 Overall, area H hosts richer and more diverse bivalve assemblages than area L, while evenness is at most slightly higher in H and may be similar between areas.
 
-## Bivalves spatial distribution
-
-```{r bivalves heatmap}
-#| echo: false
-#| error: false
-#| message: false
-#| eval: false
-#| cache: false
-#| warning: false
-#| out-width: "95%"
-
-library(terra)
-library(tidyverse)
-library(readxl)
-library(gstat)   # IDW / kriging
-library(sf)
-library(sp)
-
-Core_Diameter <- 15
-core_area <- pi * ((Core_Diameter/2)^2)
-correction_factor <- (100*100)/core_area
-
-img <- rast("data/drone/Micasense_Epiphytes_Site_L_cropped.tif")
-names(img) <- c(paste0("B",c(1:10)))
-
-mask <- vect("data/shp/mask_Site_L.shp")
-
-for (z in 1:2){
-
-  zone1 <- mask[z]
-  
-  img_cropped <- img %>% 
-    crop(zone1, mask = T) %>% 
-    project("EPSG:32630")
-  
-  df_bivalve <- read_xlsx("data/Abondance_bivalve_Bourgneuf_Bay_REWRITE_2025.xlsx") %>% 
-    mutate(Station = str_pad(Station, width = 2, pad = "0"),
-           Core = paste0(Site,"_",Station),
-           Density = Abondance * correction_factor) %>% 
-    dplyr::filter(Species != "Inconnu") %>% 
-    mutate(Species = gsub("Scobicularia plana","Splana",Species),
-           Species = gsub("Ruditapes derussatus","Rdecu", Species),
-           Species = gsub("Cerastoderma edule","Cedule", Species),
-           Species = gsub("Loripes orbiculatus","Lorbi.", Species),
-           Species = gsub("Macoma balthica","Mbalthica", Species),
-           Species = gsub("Abra tenuis","Atenuis", Species),
-           Species = gsub("Mya arenaria","Marenaria", Species),
-            Species = gsub("Mytilus sp,","Mytilus", Species),
-           Species = gsub("Ruditapes philippinarum","Rphili", Species)) %>% 
-    dplyr::select(Core,Species, Density) %>%
-    mutate(Species = gsub(". ","",Species)) %>% 
-    pivot_wider(names_from = Species, values_from = Density)
-  
-  
-  sampling_station_zone1 <- sf::read_sf("data/shp/Core_Location/Points.shp") %>% 
-    dplyr::select(Name) %>% 
-    left_join(df_bivalve, by = c("Name" = "Core")) %>% 
-    vect() %>% 
-    crop(zone1) %>% 
-    project("EPSG:32630")
-    
-  
-  
-  clear_rast_1 <- img_cropped$B1
-  
-  
-  species <- names(df_bivalve)[-1]
-
-  
-  for(sp in species){
-    
-    if(sp == "Mbalthica" & z == 2 ){
-    }else{
-     r_template <- clear_rast_1
-    dens_col   <- sp                  # column in the points with species density
-    
-    # ---- Read & align CRS ----
-    pts <- sampling_station_zone1
-    # Reproject points to match the raster CRS (important for spatial interpolation)
-    if (!identical(crs(pts), crs(r_template))) {
-      pts <- project(pts, r_template)
-    }
-    
-    # ---- Basic checks ----
-    stopifnot(dens_col %in% names(pts))
-    # IDW/kriging should be done in a projected CRS (meters), not lon/lat
-    if (grepl("longlat", crs(r_template), ignore.case = TRUE)) {
-      warning("Your template raster appears to be in lon/lat. ",
-              "Consider projecting it (e.g., to UTM) before interpolating.")
-    }
-    
-    # Keep only points with non-missing density
-    pts <- pts[!is.na(pts[[dens_col]]), ]
-    
-    # ---- Build prediction grid from the template raster ----
-    # Get cell-centers for all *non-NA* cells as points (in the same CRS as the raster)
-    grid_pts <- as.points(r_template, values = FALSE, na.rm = TRUE)
-    
-    # Convert to sf for gstat (gstat works natively with sf)
-    
-    # ---- Convert points to sp (robust for gstat) ----
-    pts_sf <- st_as_sf(pts)
-    # Drop Z/M if present
-    pts_sf <- st_zm(pts_sf, drop = TRUE, what = "ZM")
-    
-    # Remove duplicated coordinates (kriging requires unique locations)
-    coords_mat <- st_coordinates(pts_sf)
-    dup_idx <- duplicated(as.data.frame(coords_mat))
-    if (any(dup_idx)) {
-      # average duplicates
-      pts_sf <- pts_sf %>%
-        mutate(.x = coords_mat[,1], .y = coords_mat[,2]) %>%
-        group_by(.x, .y) %>%
-        summarise(!!dens_col := mean(.data[[dens_col]], na.rm = TRUE), .groups = "drop") %>%
-        st_as_sf(coords = c(".x", ".y"), crs = st_crs(pts_sf))
-    }
-    pts_sp <- as(pts_sf, "Spatial")
-    
-    # ---- Build prediction grid from the raster (only non-NA cells) ----
-    vals <- values(r_template)
-    ok_cells <- which(!is.na(vals))
-    xy <- xyFromCell(r_template, ok_cells)
-    grid_sp <- SpatialPixelsDataFrame(points = SpatialPoints(xy, proj4string = CRS(crs(r_template))),
-                                      data   = data.frame(id = seq_len(nrow(xy))))
-    
-    # ---- Empirical variogram + fit ----
-   form <- as.formula(paste(dens_col, "~ 1"))
-    vg_emp <- variogram(form, data = pts_sp)
-    # Try spherical first; fall back if needed
-    vg_fit <- try(fit.variogram(vg_emp, model = vgm("Sph")), silent = TRUE)
-    if (inherits(vg_fit, "try-error") || any(is.na(vg_fit$psill))) {
-      vg_fit <- fit.variogram(vg_emp, model = vgm("Exp"))
-    }
-    if (any(is.na(vg_fit$psill))) stop("Variogram fit failed. Check data/CRS/duplicates.")
-    
-    # ---- Ordinary kriging on the grid ----
-    ok_sp <- krige(formula = form, locations = pts_sp, newdata = grid_sp, model = vg_fit)
-    
-    # ---- Write predictions back into the terra raster template ----
-    r_ok <- r_template
-    pred <- ok_sp$var1.pred
-    values(r_ok)[ok_cells] <- pred
-    
-    # Optional: mask outside convex hull of points to avoid wild extrapolation
-    hull_sf <- st_convex_hull(st_union(st_geometry(st_as_sf(pts_sp))))
-    r_ok <- mask(r_ok, vect(hull_sf))
-    
-    # ---- Plot & export ----
-    plot(r_ok, main = "Species density — Ordinary Kriging")
-    points(pts, pch = 20, cex = 0.6)
-    writeRaster(r_ok, paste0("data/heatmap_bivalve_density/density_heatmap_",sp,"_zone_",z,".tif"), overwrite = TRUE)  
-    }
-  }
-} 
-
-mask <- vect("data/shp/mask_Site_L.shp")[1]
-mask_32630 <- mask %>% 
-  project("EPSG:32630")
-
-heatmap_plana <- rast("data/heatmap_bivalve_density/density_heatmap_Cedule_zone_1.tif")%>% 
-  crop(mask_32630, mask = T)
-names(heatmap_plana) <- "Cedule"
-
-img <- rast("data/drone/Micasense_Epiphytes_Site_L_cropped.tif") %>% 
-  crop(mask, mask = T) %>% 
-  project("EPSG:32630")
-names(img) <- c(paste0("B",c(1:10)))
-
-NDVI <- (img$B10-img$B6)/(img$B10+img$B6)
-names(NDVI) <- "NDVI"
-
-stk <- c(heatmap_plana,NDVI) %>% 
-  as.data.frame() %>% 
-  dplyr::filter(!is.na(Cedule))
-
-```
-
-
-# Relationship between bivalves and seagrass biomass
+## Relationship between bivalve abundance and seagrass biomass
 
 ```{r Biv_seagrass}
-#| label: fig-Biv_seagrass
+#| label: fig-Biv_seagrass_m2
 #| fig-cap: Density of bivalves in relation with the total biomass of seagrass (sum of above ground and below ground biomass) for site H and L. 
 #| echo: false
 #| error: false
@@ -1480,6 +1310,8 @@ p <- ggplot(plot_df, aes(x = overall_biomass, y = N_total , color = Site)) +
   ) +
   scale_x_continuous(labels = label_comma()) +
   theme_minimal(base_size = 14) +
+  scale_color_brewer(palette = "Set2") +   # or "Dark2" for stronger contrast
+
   theme(
     legend.position = "top",
     plot.title = element_text(face = "bold", hjust = 0.5),
@@ -1500,7 +1332,279 @@ g <- girafe(
 g
 ```
 
-@fig-Biv_seagrass shows the relationship between the density of bivalve and the overall biomass (below and above ground) of seagrasses. For a given biomass of seagrass, @fig-Biv_seagrass is showing that the Site H have overall higher density of bivalve then site L. 
+@fig-Biv_seagrass_m2 illustrates the relationship between bivalve density (individuals per m²) and total seagrass biomass (above- and below-ground combined). Overall, bivalve density tends to be higher in site H compared to site L for a given seagrass biomass. In site H, values are more scattered, with several cores exceeding 700 individuals per m², whereas site L shows consistently lower densities, generally below 500 individuals per m². Both sites display a positive, though weak, association between biomass and bivalve density, as indicated by the fitted regression lines, but the wide confidence bands highlight considerable variability. This suggests that while higher seagrass biomass may provide more habitat structure and support larger bivalve populations, other local factors likely contribute to the observed heterogeneity.
+
+## Relation between bivalve diversity and seagrass biomass 
+
+@fig-Biv_seagrass_m2 shows the relationship between bivalve diversity and the total biomass of seagrass (above- and below-ground combined). Overall, no clear association was observed between these two variables, suggesting that bivalve diversity is primarily influenced by other environmental factors rather than seagrass biomass. The only exception was species richness in site L, where a weak positive relationship was apparent: cores with higher seagrass biomass tended to host a greater number of bivalve species.
+
+```{r Biv_Diversity_seagrass}
+#| label: fig-Biv_Indices_seagrass_m2
+#| fig-cap: Diversity indices of bivalves in relation with the total biomass of seagrass (sum of above ground and below ground biomass) for site H and L. 
+#| echo: false
+#| error: false
+#| message: false
+#| warning: false
+#| out-width: "95%"
+
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(ggiraph)
+library(glue)
+library(scales)
+
+df_long <- df_bivalve_seagrass %>%
+  dplyr::select(Core, Site, overall_biomass, Shannon_H, Evenness_J, Richness_S) %>%
+  pivot_longer(
+    cols = c(Shannon_H, Evenness_J, Richness_S),
+    names_to = "Metric", values_to = "Value"
+  ) %>%
+  mutate(
+    Metric_lab = recode(Metric,
+                        Shannon_H = "Shannon H′",
+                        Evenness_J = "Evenness J",
+                        Richness_S = "Richness S"),
+    tooltip = glue(
+      "<b>Core:</b> {Core}<br/>",
+      "<b>Site:</b> {Site}<br/>",
+      "<b>{Metric_lab}:</b> {round(Value, 3)}<br/>",
+      "<b>Total biomass:</b> {number(overall_biomass, accuracy = 0.1)} g/m²"
+    )
+  )
+
+p_faceted <- ggplot(df_long, aes(x = overall_biomass, y = Value, color = Site)) +
+  geom_point_interactive(aes(tooltip = tooltip, data_id = Core), size = 3, alpha = 0.9) +
+  geom_smooth(method = "glm", se = TRUE, linewidth = 0.9, alpha = 0.15) +
+  facet_wrap(~ Metric_lab, scales = "free_y", ncol = 2) +
+  labs(
+    title = "Biodiversity indices vs seagrass biomass",
+    x = "Biomass of seagrass - Above and below - (g/m²)", y = NULL
+  ) +
+  scale_x_continuous(labels = label_comma()) +
+    scale_color_brewer(palette = "Set2") +   # or "Dark2" for stronger contrast
+  theme_minimal(base_size = 14) +
+  theme(
+    legend.position = "top",
+    plot.title = element_text(face = "bold", hjust = 0.5),
+    panel.grid.minor = element_blank()
+  )
+
+g_faceted <- girafe(
+  ggobj = p_faceted,
+  width_svg = 10, height_svg = 7,
+  options = list(
+    opts_hover(css = "stroke-width:2; opacity:1;"),
+    opts_selection(type = "single"),
+    opts_toolbar(saveaspng = TRUE),
+    opts_zoom(max = 5)
+  )
+)
+
+g_faceted  
+
+
+```
+
+## Focus on *Loripes orbiculatus*
+
+@fig-Loripes_density compares the density of *Loripes orbiculatus* between sites H and L. Median densities were higher at site H (≈85 ind./m²) than at site L (0 ind./m²), with broader variability observed in H. The Kruskal–Wallis test confirmed a significant difference between sites ($\chi^2=9.83$, $p<0.05$), indicating that *L. orbiculatus* was substantially more abundant in H than in L.
+
+```{r Loripes Abundance}
+#| label: fig-Loripes_density
+#| fig-cap: Density of *Loripes orbiculatus* depending on the site were it was sampled. 
+#| echo: false
+#| error: false
+#| message: false
+#| warning: false
+#| out-width: "95%"
+
+library(dplyr)
+library(ggplot2)
+library(scales)
+library(rstatix)   # kruskal_test, dunn_test, add_xy_position
+library(ggpubr)
+
+Core_Diameter <- 15
+core_area <- pi * ((Core_Diameter/2)^2)
+correction_factor <- (100*100)/core_area
+
+df_Loripes_Site <- read_xlsx("data/Abondance_bivalve_Bourgneuf_Bay_REWRITE_2025.xlsx") %>% 
+  mutate(Station = str_pad(Station, width = 2, pad = "0"),
+         Core = paste0(Site,"_",Station),
+         Density = Abondance * correction_factor) %>% 
+  dplyr::filter(Species != "Inconnu") %>% 
+  mutate(Species = gsub("Scobicularia plana","S. plana",Species),
+         Species = gsub("Ruditapes derussatus","R. decu.", Species),
+         Species = gsub("Cerastoderma edule","C. edule", Species),
+         Species = gsub("Loripes orbiculatus","L. orbi.", Species),
+         Species = gsub("Macoma balthica","M. balthica", Species),
+         Species = gsub("Abra tenuis","A. tenuis", Species),
+         Species = gsub("Mya arenaria","M. arenaria", Species),
+         Species = gsub("Ruditapes philippinarum","R. phili.", Species)) %>% 
+  dplyr::filter(Species == "L. orbi.")
+
+kw <- df_Loripes_Site %>% kruskal_test(Density ~ Site)
+
+# Pairwise Dunn post-hoc with positions for plotting
+dunn <- df_Loripes_Site %>%
+  dunn_test(Density ~ Site, p.adjust.method = "BH") %>%
+  add_xy_position(x = "Site")    # positions brackets above boxes
+
+# --- Per-site counts for n labels ---
+counts <- df_Loripes_Site %>%
+  group_by(Site) %>%
+  summarise(n = n(), y = max(Density, na.rm = TRUE) * 1.02, .groups = "drop")
+
+# --- Base plot ---
+p <- df_Loripes_Site %>% 
+  ggplot(aes(x = Site, y = Density, fill = Site)) +
+  geom_boxplot(width = 0.6, alpha = 0.6, color = "black", outlier.shape = NA) +
+  # median tick mark (—) for readability
+  stat_summary(fun = median, geom = "point", shape = 95, size = 7, color = "black") +
+  # n labels
+  geom_text(data = counts, aes(x = Site, y = 240, label = paste0("n = ", n)),
+            vjust = 0, size = 5) +
+  labs(
+    title = "Loripes orbiculatus — Density by Site",
+    subtitle = paste0("Kruskal–Wallis: χ² = ",
+                      round(kw$statistic, 2),
+                      ", df = ", kw$df,
+                      ", p = ", format.pval(kw$p, digits = 3, eps = .001)),
+    x = NULL,
+    y = "Density (ind/m²)"
+  ) +
+  scale_y_continuous(labels = label_comma(), expand = expansion(mult = c(0.02, 0.12))) +
+  scale_fill_brewer(palette = "Set2") +
+  guides(fill = "none") +
+  theme_minimal(base_size = 15) +
+  theme(
+    plot.title = element_text(face = "bold", hjust = 0.5, size = 16),
+    axis.text.x = element_text(face = "bold"),
+    panel.grid.minor = element_blank()
+  )
+
+# --- Add pairwise significance brackets ---
+p + stat_pvalue_manual(
+  dunn,
+  label = "p.adj.signif",  # significance stars (ns, *, **, ***)
+  tip.length = 0.01,
+  bracket.size = 1
+)
+
+```
+
+@fig-Loripes_biomass illustrates the relationship between Loripes orbiculatus density and total seagrass biomass (above- and below-ground combined). Across all samples, a moderate positive correlation was detected (Spearman ρ = 0.501, p < 0.001, n = 59). At the site level, patterns differed: in site H, Loripes density increased significantly with seagrass biomass (ρ = 0.555, p = 0.0015; slope = 0.531), whereas in site L, the relationship was weaker and not statistically significant (ρ = 0.264, p = 0.175; slope = 0.247).
+
+```{r  Loripes Abundance vs seagrass}
+#| label: fig-Loripes_biomass
+#| fig-cap: Density of *Loripes orbiculatus* depending on the total biomass of seagrass.
+#| echo: false
+#| error: false
+#| message: false
+#| warning: false
+#| out-width: "95%"
+
+
+df_Loripes_Site <- read_xlsx("data/Abondance_bivalve_Bourgneuf_Bay_REWRITE_2025.xlsx") %>% 
+  mutate(Station = str_pad(Station, width = 2, pad = "0"),
+         Core = paste0(Site,"_",Station),
+         Density = Abondance * correction_factor) %>% 
+  dplyr::filter(Species != "Inconnu") %>% 
+  mutate(Species = gsub("Scobicularia plana","S. plana",Species),
+         Species = gsub("Ruditapes derussatus","R. decu.", Species),
+         Species = gsub("Cerastoderma edule","C. edule", Species),
+         Species = gsub("Loripes orbiculatus","L. orbi.", Species),
+         Species = gsub("Macoma balthica","M. balthica", Species),
+         Species = gsub("Abra tenuis","A. tenuis", Species),
+         Species = gsub("Mya arenaria","M. arenaria", Species),
+         Species = gsub("Ruditapes philippinarum","R. phili.", Species)) %>% 
+  dplyr::filter(Species == "L. orbi.") %>% 
+  dplyr::select(Station = "Core", Site,Density)
+
+df_Loripes_Seagrass <- dryweight %>% 
+  left_join(df_Loripes_Site, by = "Station")
+
+
+
+plot_df_Loripes <- df_Loripes_Seagrass %>%
+  filter(is.finite(A), is.finite(Density)) %>%
+  mutate(
+    tooltip = glue(
+      "<b>Core:</b> {Station}<br/>",
+      "<b>Site:</b> {Site}<br/>",
+      "<b>Above-ground biomass A:</b> {number(A, accuracy = 0.1)} g/m²<br/>",
+      "<b>Below-ground biomass B:</b> {number(B, accuracy = 0.1)} g/m²<br/>",
+      "<b>Abundance of Loripes:</b> {number(Density, accuracy = 0.1)} ind/m²"
+    )
+  )
+
+plot_df_Loripes2 <- plot_df_Loripes %>%
+  mutate(Biomass = A + B)
+
+# overall Spearman correlation for the subtitle
+ct_all <- cor.test(plot_df_Loripes2$Biomass, plot_df_Loripes2$Density, method = "spearman")
+sub_txt <- glue("Overall Spearman ρ = {round(ct_all$estimate, 3)}, p = {signif(ct_all$p.value, 3)}, n = {nrow(plot_df_Loripes2)}")
+
+# per-site stats (linear slope + Spearman)
+stats_site <- plot_df_Loripes2 %>%
+  group_by(Site) %>%
+  summarise(
+    n        = n(),
+    rho      = suppressWarnings(cor(Biomass, Density, method = "spearman", use = "complete.obs")),
+    p_rho    = suppressWarnings(cor.test(Biomass, Density, method = "spearman")$p.value),
+    slope    = coef(lm(Density ~ Biomass))[2],
+    .groups  = "drop"
+  ) %>%
+  mutate(
+    label = glue("n = {n}\nρ = {round(rho,3)} (p = {signif(p_rho,3)})\nslope = {round(slope,3)}")
+  )
+
+# choose non-overlapping y positions for the labels
+ymax <- max(plot_df_Loripes2$Density, na.rm = TRUE)
+stats_site <- stats_site %>%
+  arrange(desc(Site)) %>%                # ensures different offsets if only two sites
+  mutate(x = -Inf,                       # top-left corner
+         y = seq(ymax, ymax*0.7, length.out = n()))  # stagger vertically
+
+# --- Plot with stats annotations ---
+p <- ggplot(plot_df_Loripes2, aes(x = Biomass, y = Density, color = Site)) +
+  geom_point_interactive(aes(tooltip = tooltip, data_id = Station), size = 3, alpha = 0.9) +
+  geom_smooth(method = "glm", se = TRUE, linewidth = 0.9, alpha = 0.15) +
+  # per-site stats labels (static text on the interactive plot)
+  geom_label(data = stats_site, aes(x = x, y = y, label = label, color = Site),
+             inherit.aes = FALSE, show.legend = F,hjust = -0.05, vjust = 1, fill = "white", alpha = 0.8, label.size = 0.2) +
+  labs(
+    title = "Loripes per m² vs Seagrass biomass",
+    subtitle = sub_txt,
+    x = "Biomass of seagrass — Above + Below (g/m²)",
+    y = "Individuals of Loripes per m²"
+  ) +
+  scale_x_continuous(labels = scales::label_comma()) +
+  theme_minimal(base_size = 14) +
+  scale_color_brewer(palette = "Set2") +
+  theme(
+    legend.position = "top",
+    plot.title = element_text(face = "bold", hjust = 0.5),
+    panel.grid.minor = element_blank()
+  )
+
+g <- girafe(
+  ggobj = p,
+  width_svg = 9, height_svg = 6,
+  options = list(
+    opts_hover(css = "stroke-width:2; opacity:1;"),
+    opts_selection(type = "single"),
+    opts_toolbar(saveaspng = TRUE),
+    opts_zoom(max = 5)
+  )
+)
+
+g
+
+```
+
+**Taken together, these results indicate that *L. orbiculatus* is both more abundant and more closely associated with seagrass biomass in site H, where meadows have maintained consistently high cover over the past 40 years. In contrast, at site L, where seagrass cover has been more variable through time, *Loripes* populations remain sparse and show no clear link with biomass. This suggests that long-term meadow stability may be a key factor supporting dense and persistent *L. orbiculatus* populations.**
 
 ```{r zip outputs}
 #| echo: false
@@ -1523,4 +1627,3 @@ files <- list.files(folder_to_zip, recursive = TRUE, full.names = TRUE)
 
 utils::zip(zipfile = zip_file, files = files)
 ```
-

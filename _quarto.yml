@@ -7,10 +7,8 @@ website:
   navbar:
     left:
       - href: index.qmd
-        text: Home
-      - href: M2_Assignement.qmd
-        text: Master2 Assignement
-      # - text: Ria de Aveiro Lagoon      # label that shows in the bar
+        text: Master2 Assignement 
+      # label that shows in the bar
       #   menu:                   # dropdown starts here
       #     - href: Aveiro_Lagoon.qmd
       #       text: Mapping
