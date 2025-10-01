@@ -353,8 +353,6 @@ From the hyperspectral signatures presented in @fig-hyperspectral_m2, the Normal
 #| message: false
 #| warning: false
 #| out-width: "95%"
-#| fig-height: 9
-#| fig-width: 6
 
 library(dplyr)
 library(purrr)
@@ -519,18 +517,23 @@ make_panel <- function(res) {
     labs(title = res$label, x = "NDVI", y = "Above ground biomass (g/m²)") +
     annotate("text", x = 0.15, y = Inf, hjust = 0, vjust = 1.2,
              label = lbl_text, size = 3) +
-    theme_minimal(base_size = 8)+
+    theme_minimal(base_size = 15)+
     theme(plot.title = element_text(size = 10))
 }
 
 panels <- lapply(results_list, make_panel)
 
 # ---- Patchwork layout for 5 panels ----
-wrap_plots(panels, ncol = 2)
+# wrap_plots(panels, ncol = 2)
 
+panels[2]
 ```
 
-$$ \begin{flalign*} \text{Linear: } & \quad Above = -19.952 + 185.677 \cdot \mathrm{NDVI} && \\[6pt] \textcolor{BurntOrange}{\text{Quadratic: }} & \quad Above = -0.643 + 83.650 \cdot \mathrm{NDVI} + 120.532 \cdot \mathrm{NDVI}^{2} && \\[6pt] \text{Log-linear: } & \quad Above = 121.622 + 67.956 \cdot \log(\mathrm{NDVI}) && \\[6pt] \text{Exponential: } & \quad Above = 9.784 \cdot e^{\,3.796 \cdot \mathrm{NDVI}} && \\[6pt] \text{Power law: } & \quad Above = 187.326 \cdot \mathrm{NDVI}^{1.457} && \end{flalign*} $$
+$$ 
+\begin{flalign*} 
+\text{Quadratic: } & \quad AboveGround_{biomass} = -0.643 + 83.650 \cdot \mathrm{NDVI} + 120.532 \cdot \mathrm{NDVI}^{2} && \\[6pt] 
+\end{flalign*} 
+$$
 
 The results, summarized in @fig-hyperspectral_NDVI_ABiomass, show that the quadratic model provided the best fits, with R² values around 0.657 and lowest RMSE compared to the other formulations, indicating that NDVI is a reliable predictor of above-ground seagrass biomass in this meadow.
  
@@ -546,8 +549,6 @@ The relationships between NDVI and below-ground seagrass biomass were generally 
 #| message: false
 #| warning: false
 #| out-width: "95%"
-#| fig-height: 9
-#| fig-width: 6
 
 library(dplyr)
 library(purrr)
@@ -555,6 +556,7 @@ library(broom)
 library(ggplot2)
 library(minpack.lm)
 library(patchwork)
+library(tidyverse)
 
 Core_Diameter <- 15 ### diameter of the core used for sampling (in cm)
 
@@ -713,27 +715,223 @@ make_panel <- function(res) {
     labs(title = res$label, x = "NDVI", y = "Below ground biomass (g/m²)") +
     annotate("text", x = 0.15, y = Inf, hjust = 0, vjust = 1.2,
              label = lbl_text, size = 3) +
-    theme_minimal(base_size = 8)+
+    theme_minimal(base_size = 15)+
     theme(plot.title = element_text(size = 10))
 }
 
 panels <- lapply(results_list, make_panel)
 
 # ---- Patchwork layout for 5 panels ----
-wrap_plots(panels, ncol = 2)
+# wrap_plots(panels, ncol = 2)
 
+
+ panels[[2]]
 ```
 
 $$
 \begin{flalign*}
-\text{Linear: } & \quad Below = -14.984 + 141.623 \cdot \mathrm{NDVI} && \\[6pt]
-\textcolor{BurntOrange}{\text{Quadratic: }} & \quad Below = 4.189 + 84.580 \cdot \mathrm{NDVI} + 67.389 \cdot \mathrm{NDVI}^{2} && \\[6pt]
-\text{Log-linear: } & \quad Below = 93.009 + 51.843 \cdot \log(\mathrm{NDVI}) && \\[6pt]
-\text{Exponential: } & \quad Below = 7.937 \cdot e^{\,3.553 \cdot \mathrm{NDVI}} && \\[6pt]
-\text{Power law: } & \quad Below = 124.392 \cdot \mathrm{NDVI}^{1.350} &&
+\text{Quadratic: } & \quad BelowGround_{biomass} = 4.189 + 84.580 \cdot \mathrm{NDVI} + 67.389 \cdot \mathrm{NDVI}^{2} && \\[6pt]
 \end{flalign*}
 $$
 
+## Total biomass
+
+The relationships between NDVI and the total seagrass biomass were comparable to those observed for above-ground biomass. Among the tested functional forms, the quadratic model provided the best performance, with an R² of 0.643 and an RMSE of 33.1 g·m⁻². However, this RMSE is approximately 18 g·m⁻² higher than that obtained for above-ground biomass, highlighting the weaker predictive capacity of NDVI for total biomass compared to its stronger relationship with the photosynthetic canopy (@fig-hyperspectral_NDVI_TBiomass).
+
+
+```{r hyperspectral NDVI_TBiomass}
+#| label: fig-hyperspectral_NDVI_TBiomass
+#| fig-cap: Relationship between the NDVI of hyperspectral measurement and the dryweight of total biomass of seagrass sampled in zone H.
+#| echo: false
+#| error: false
+#| message: false
+#| warning: false
+#| out-width: "95%"
+
+library(dplyr)
+library(purrr)
+library(broom)
+library(ggplot2)
+library(minpack.lm)
+library(patchwork)
+library(tidyverse)
+
+Core_Diameter <- 15 ### diameter of the core used for sampling (in cm)
+
+core_area <- pi*((Core_Diameter/2)^2) #### Area of the core
+
+correction_factor <- (100*100)/core_area #### Correction factor to convert the dry weight to g/m²
+
+dryweight <- readxl::read_xlsx("data/DryWeight_Cores.xlsx") %>% 
+  mutate(A = A*correction_factor,
+         B = B*correction_factor,
+         Total = A + B,
+         Area = substr(Station,1,1))
+
+df_NDVI <- read.delim("data/spectra/20250911_Bourgneuf_H_stations_reflectance.txt") %>% 
+  pivot_longer(-Wavelength, names_to = "spectra", values_to = "ref") %>% 
+  mutate(spectra = substr(spectra, 1,3)) %>% 
+  group_by(Wavelength, spectra) %>% 
+  reframe(ref_mean = mean(ref, na.rm = TRUE),
+          sd = sd(ref)) %>% 
+  ungroup() %>% 
+  mutate(spectra = gsub("H","H_",spectra)) %>% 
+  dplyr::filter(Wavelength > 400,
+                Wavelength < 900) %>% 
+  group_by(spectra) %>% 
+  reframe(
+    RED = ref_mean[which.min(abs(Wavelength - 670))],
+    NIR = ref_mean[which.min(abs(Wavelength - 800))],
+    NDVI = (NIR - RED) / (NIR + RED)
+  ) %>% 
+  left_join(dryweight, by = c("spectra" = "Station")) %>% 
+  dplyr::select(-c(Area,NIR,RED))
+
+
+#--- Data (ensure finite, drop NAs) ---
+dat <- df_NDVI %>%
+  select(NDVI, Total) %>%
+  filter(is.finite(NDVI), is.finite(Total)) 
+
+# --- helpers ---
+metrics <- function(y, yhat) {
+  sse <- sum((y - yhat)^2)
+  sst <- sum((y - mean(y))^2)
+  tibble(R2 = 1 - sse/sst, RMSE = sqrt(mean((y - yhat)^2)))
+}
+smear_factor <- function(resid) exp(0.5 * stats::var(resid))
+
+# prediction grid
+ndvi_seq <- tibble(NDVI = seq(min(dat$NDVI, na.rm = TRUE),
+                              max(dat$NDVI, na.rm = TRUE), length.out = 200))
+
+# ---- Model specs: fit, predict (original scale), label ----
+specs <- list(
+  linear = list(
+    label = "Linear (Total ~ NDVI)",
+    fit = function(d) lm(Total ~ NDVI, data = d),
+    pred = function(fit, newd) tibble(Total_hat = as.numeric(predict(fit, newd))),
+    eq  = function(fit) {
+      b <- coef(fit); sprintf("Total = %.3f + %.3f·NDVI", b[1], b[2])
+    }
+  ),
+  quadratic = list(
+    label = "Quadratic (Total ~ NDVI + NDVI^2)",
+    fit = function(d) lm(Total ~ poly(NDVI, 2, raw = TRUE), data = d),
+    pred = function(fit, newd) tibble(Total_hat = as.numeric(predict(fit, newd))),
+    eq  = function(fit) {
+      b <- coef(fit); sprintf("Total = %.3f + %.3f·NDVI + %.3f·NDVI²", b[1], b[2], b[3])
+    }
+  ),
+  log_linear = list(
+    label = "Log-linear (Total ~ log(NDVI))",
+    fit = function(d) { d2 <- d %>% filter(NDVI > 0); lm(Total ~ log(NDVI), data = d2) },
+    pred = function(fit, newd) {
+      newd2 <- newd %>% mutate(NDVI = pmax(NDVI, .Machine$double.eps))
+      tibble(Total_hat = as.numeric(predict(fit, newd2)))
+    },
+    eq  = function(fit) { b <- coef(fit); sprintf("Total = %.3f + %.3f·log(NDVI)", b[1], b[2]) }
+  ),
+  exponential = list(
+    label = "Exponential (Total = a·e^{b·NDVI})",
+    fit = function(d) { d2 <- d %>% filter(Total > 0); lm(log(Total) ~ NDVI, data = d2) },
+    pred = function(fit, newd) {
+      sf <- smear_factor(residuals(fit))
+      tibble(Total_hat = as.numeric(exp(predict(fit, newd)) * sf))
+    },
+    eq  = function(fit) {
+      b <- coef(fit); sprintf("Total = %.3f·e^{%.3f·NDVI}", exp(b[1]), b[2])
+    }
+  ),
+  power = list(
+    label = "Power (Total = a·NDVI^b)",
+    fit = function(d) { d2 <- d %>% filter(Total > 0, NDVI > 0); lm(log(Total) ~ log(NDVI), data = d2) },
+    pred = function(fit, newd) {
+      newd2 <- newd %>% mutate(NDVI = pmax(NDVI, .Machine$double.eps))
+      sf <- smear_factor(residuals(fit))
+      tibble(Total_hat = as.numeric(exp(predict(fit, newd2)) * sf))
+    },
+    eq  = function(fit) {
+      b <- coef(fit); sprintf("Total = %.3f·NDVI^{%.3f}", exp(b[1]), b[2])
+    }
+  )
+)
+
+# ---- Bootstrap CI function (shared) ----
+bootstrap_ci <- function(spec, d, newd, B = 400, conf = 0.95, seed = 123) {
+  set.seed(seed)
+  fit0  <- spec$fit(d)
+  pred0 <- spec$pred(fit0, newd) %>% pull(Total_hat)
+  obs_hat <- spec$pred(fit0, d) %>% pull(Total_hat)
+  stats0  <- metrics(d$Total, obs_hat)
+
+  P <- matrix(NA_real_, nrow = nrow(newd), ncol = B)
+  b <- 1
+  while (b <= B) {
+    idx <- sample(seq_len(nrow(d)), replace = TRUE)
+    db  <- d[idx, , drop = FALSE]
+    fb  <- try(spec$fit(db), silent = TRUE)
+    if (inherits(fb, "try-error")) next
+    pb  <- try(spec$pred(fb, newd) %>% pull(Total_hat), silent = TRUE)
+    if (inherits(pb, "try-error") || any(!is.finite(pb))) next
+    P[, b] <- pb
+    b <- b + 1
+  }
+  alpha <- (1 - conf) / 2
+  lwr <- apply(P, 1, quantile, probs = alpha, na.rm = TRUE)
+  upr <- apply(P, 1, quantile, probs = 1 - alpha, na.rm = TRUE)
+
+  list(fit = fit0,
+       grid = bind_cols(newd, tibble(Total_hat = pred0, lwr = lwr, upr = upr)),
+       stats = stats0)
+}
+
+# ---- Run the 5 models ----
+results_list <- purrr::imap(specs, function(spec, key) {
+  res <- bootstrap_ci(spec, dat, ndvi_seq, B = 400, conf = 0.95, seed = 42)
+  list(
+    key   = key,
+    label = spec$label,
+    fit   = res$fit,
+    grid  = res$grid,
+    eq    = specs[[key]]$eq(res$fit),
+    stats = res$stats
+  )
+})
+
+# ---- Build one plot per model ----
+make_panel <- function(res) {
+  eq_text  <- res$eq
+  r2_text  <- sprintf("R² = %.3f | RMSE = %.2f", res$stats$R2, res$stats$RMSE)
+  # lbl_text <- paste(eq_text, r2_text, sep = "\n")
+  lbl_text = r2_text
+
+  ggplot() +
+    geom_point(data = dat, aes(NDVI, Total), alpha = 0.8) +
+    geom_ribbon(data = res$grid, aes(NDVI, ymin = lwr, ymax = upr), alpha = 0.2) +
+    geom_line(data = res$grid, aes(NDVI, Total_hat), linewidth = 1) +
+    labs(title = res$label, x = "NDVI", y = "Total biomass (g/m²)") +
+    annotate("text", x = 0.15, y = Inf, hjust = 0, vjust = 1.2,
+             label = lbl_text, size = 3) +
+    theme_minimal(base_size = 15)+
+    theme(plot.title = element_text(size = 10))
+}
+
+panels <- lapply(results_list, make_panel)
+
+# ---- Patchwork layout for 5 panels ----
+# wrap_plots(panels, ncol = 2)
+
+
+panels[[2]]
+```
+
+
+$$
+\begin{flalign*}
+\text{Quadratic: } & \quad Total_{biomass} = -4.832 + 168.230 \cdot \mathrm{NDVI} + 187.922 \cdot \mathrm{NDVI}^{2} && \\[6pt]
+\end{flalign*}
+$$
 For both the modeling of the above ground and the below ground biomass the **quadratic** relationship will be used for the rest of the analysis. 
 
 ## Mapping the biomass of seagrass across the meadow. 
@@ -974,11 +1172,11 @@ p1 + p2 + plot_layout(widths = c(2, 1))
 
 @fig-BivDensity_m2 shows the mean density of each bivalve species across the 60 cores. In total, nine distinct species were identified. The most common was *Scrobicularia plana* (209 individuals per m², on average, present in about 77% of cores), whereas *Ruditapes decussatus* was the least common (0.95 individuals per m²,  present in about 1% of cores).
 
-## Bivalve diversity by core
+## Bivalve diversity by Site
 
 ```{r Shannon index}
 #| label: fig-Biv_diversity_m2
-#| fig-cap: Interactive lollipop charts of bivalve diversity per core (n = 60). For each core (colored by site), we show Shannon diversity (H′), species richness (S), and Pielou evenness (J′). Metrics were computed from species‐level counts; H′ uses natural logarithms and J′ = H′/ln(S). Lines run from 0 to the core’s value and points mark the estimate; cores with no identified bivalves appear with H′ = 0 and J′ = 0. Hover to see exact values. 
+#| fig-cap: Boxplot of bivalve diversity per Site (n = 59). For each core (colored by site), we show Shannon diversity (H′), species richness (S), and Pielou evenness (J′). Metrics were computed from species‐level counts; H′ uses natural logarithms and J′ = H′/ln(S).  
 #| echo: false
 #| error: false
 #| message: false
@@ -986,17 +1184,13 @@ p1 + p2 + plot_layout(widths = c(2, 1))
 #| out-width: "95%"
 
 
-library(dplyr)
-library(tidyr)
+library(tidyverse)
+library(readxl)
 library(vegan)
-library(ggplot2)
-library(ggiraph)
-library(scales)
-library(tidytext)  # for reorder_within / scale_y_reordered
-library(glue)
-library(brms)       # Bayesian models via Stan
-library(posterior) 
+library(rstatix)
+library(ggpubr)
 
+# --- Load & clean ---
 Core_Diameter <- 15
 core_area <- pi * ((Core_Diameter/2)^2)
 correction_factor <- (100*100)/core_area
@@ -1005,197 +1199,104 @@ df_bivalve <- read_xlsx("data/Abondance_bivalve_Bourgneuf_Bay_REWRITE_2025.xlsx"
   mutate(Station = str_pad(Station, width = 2, pad = "0"),
          Core = paste0(Site,"_",Station),
          Density = Abondance * correction_factor) %>% 
-  dplyr::filter(Species != "Inconnu") %>% 
-  mutate(Species = gsub("Scobicularia","Scrobicularia",Species),
-         Species = gsub("derussatus","decussatus", Species))
-
-# --- Core/species universes ---
-cores   <- df_bivalve %>% distinct(Core, Site)  # one site per core expected
-species <- df_bivalve %>% distinct(Species)
-
-# sanity check: duplicated core->site?
-dup_cores <- cores %>% count(Core) %>% filter(n > 1)
-if (nrow(dup_cores) > 0) {
-  warning("Some cores map to multiple Sites; check 'cores' table.")
-}
-
-# --- Long community table with all Core x Species (zeros filled) ---
-comm_long <- df_bivalve %>%
-  group_by(Core, Species) %>%
-  summarise(Abund = sum(Abondance, na.rm = TRUE), .groups = "drop") %>%
-  complete(Core = cores$Core, Species = species$Species, fill = list(Abund = 0))
-
-# --- Wide matrix for vegan ---
-comm <- comm_long %>%
-  pivot_wider(names_from = Species, values_from = Abund, values_fill = 0) %>%
-  arrange(Core)
-
-mat <- as.matrix(comm[, -1, drop = FALSE])
-
-# --- Diversity metrics per core ---
-H <- vegan::diversity(mat, index = "shannon")      # may be NA for all-zero rows
-S <- vegan::specnumber(mat)
-J <- ifelse(S > 0, H / log(S), 0)
-N <- rowSums(mat)
-
-# replace NA H with 0 for empty cores
-H[is.na(H)] <- 0
-
-shannon_by_core <- tibble(
-  Core       = comm$Core,
-  Shannon_H  = as.numeric(H),
-  Richness_S = as.numeric(S),
-  Evenness_J = as.numeric(J),
-  N_total    = as.integer(N)
-) %>%
-  left_join(cores, by = "Core")  # safe: 1 row per Core
-
-# --- Long for plotting ---
-long <- shannon_by_core %>%
-  pivot_longer(c(Shannon_H, Richness_S, Evenness_J),
-               names_to = "metric", values_to = "value") %>%
+  filter(Species != "Inconnu") %>% 
   mutate(
-    metric = recode(metric,
-      Shannon_H  = "Shannon H′",
-      Richness_S = "Richness S",
-      Evenness_J = "Evenness J′"
-    ),
-    tooltip = glue(
-      "<b>{Core}</b><br/>Site: {Site}<br/>{metric}: {round(value, 3)}<br/>",
-      "Total individuals: {N_total}"
-    ),
-    Core_ord = reorder_within(Core, value, metric),
-    data_id  = paste(Core, metric, sep = "::")   # unique per facet row
+    Species = gsub("Scobicularia","Scrobicularia",Species),
+    Species = gsub("derussatus","decussatus", Species)
   )
 
-# --- Interactive lollipop chart (one row per Core per metric) ---
-p <- ggplot(long, aes(x = value, y = Core  , color = Site)) +
-  geom_segment_interactive(
-    aes(x = 0, xend = value, yend = Core  , tooltip = tooltip, data_id = data_id),
-    linewidth = 0.6, alpha = 0.55
-  ) +
-  geom_point_interactive(
-    aes(tooltip = tooltip, data_id = data_id),
-    size = 3
-  ) +
-  facet_wrap(~ metric, scales = "free_x", ncol = 3) +
-      scale_color_brewer(palette = "Set2") +   # or "Dark2" for stronger contrast
+# -------------------------------------------------------------------
+# 1) Build CORE x SPECIES table, keep Site per core
+# -------------------------------------------------------------------
+core_comm <- df_bivalve %>%
+  group_by(Core, Site, Species) %>%
+  summarise(Abund = sum(Abondance, na.rm = TRUE), .groups = "drop")
 
-  scale_y_reordered() +
-  labs(title = "Bivalve Diversity by Core (interactive)", x = NULL, y = "Core") +
-  theme_minimal(base_size = 13) +
-  theme(
-    plot.title = element_text(face = "bold", hjust = 0.5),
-    panel.grid.major.y = element_blank(),
-    legend.position = "top"
-  )
+core_mat <- core_comm %>%
+  pivot_wider(names_from = Species, values_from = Abund, values_fill = 0) %>%
+  arrange(Core, Site)
 
-girafe(
-  ggobj = p,
-  width_svg = 10, height_svg = 8,
-  options = list(
-    opts_hover(css = "stroke-width:2; opacity:1;"),
-    opts_selection(type = "multiple", css = "stroke-width:3;"),
-    opts_toolbar(saveaspng = TRUE),
-    opts_zoom(max = 4)
-  )
+# Species columns (everything numeric except optional 'Core','Site')
+species_cols <- setdiff(names(core_mat), c("Core", "Site"))
+mat_core <- as.matrix(core_mat[, species_cols, drop = FALSE])
+rownames(mat_core) <- core_mat$Core
+
+# -------------------------------------------------------------------
+# 2) Diversity indices PER CORE
+# -------------------------------------------------------------------
+H_core <- vegan::diversity(mat_core, index = "shannon")
+S_core <- vegan::specnumber(mat_core)
+J_core <- ifelse(S_core > 0, H_core / log(S_core), 0)
+N_core <- rowSums(mat_core)
+
+core_indices <- tibble(
+  Core       = core_mat$Core,
+  Site       = core_mat$Site,
+  Shannon_H  = as.numeric(H_core),
+  Richness_S = as.numeric(S_core),
+  Evenness_J = as.numeric(J_core),
+  N_total    = as.integer(N_core)
 )
 
-#### Stats
+# -------------------------------------------------------------------
+# 3) Long format for faceted boxplots + stats by Site
+# -------------------------------------------------------------------
+core_long <- core_indices %>%
+  select(Core, Site, Shannon_H, Richness_S, Evenness_J) %>%
+  pivot_longer(-c(Core, Site),
+               names_to = "metric", values_to = "value") %>%
+  mutate(metric = recode(metric,
+                         Shannon_H = "Shannon H′",
+                         Richness_S = "Richness S",
+                         Evenness_J = "Evenness J′"))
 
+# Kruskal–Wallis per metric
+kw_all <- core_long %>%
+  group_by(metric) %>%
+  kruskal_test(value ~ Site)
 
-# # Data we built earlier
-# div <- shannon_by_core %>%
-#   select(Core, Site, Shannon_H, Richness_S, Evenness_J) %>%
-#   mutate(Site = factor(Site, levels = c("L","H")))  # baseline = L
-# 
-# # For Beta regression (J' in (0,1)), move exact 0/1 slightly inside using Smithson-Verkuilen
-# N <- nrow(div)
-# div <- div %>%
-#   mutate(Evenness_beta = (Evenness_J * (N - 1) + 0.5) / N)
-# 
-# # ---------- 1) Shannon H′ : Student-t (robust Gaussian) ----------
-# fit_H <- brm(
-#   Shannon_H ~ 0 + Site,               # group means directly
-#   data   = div,
-#   family = student(),
-#   prior  = c(
-#     prior(normal(0, 5), class = "b"),
-#     prior(student_t(3, 0, 2.5), class = "sigma"),
-#     prior(gamma(2, 0.1), class = "nu")
-#   ),
-#   chains = 4, iter = 4000, cores = 4, seed = 1
-# )
-# 
-# draws_H <- as_draws_df(fit_H)
-# diff_H  <- draws_H$b_SiteH - draws_H$b_SiteL    # posterior of H - L (on original scale)
-# 
-# # ---------- 2) Richness S : Negative Binomial ----------
-# fit_S <- brm(
-#   Richness_S ~ 0 + Site,
-#   data   = div,
-#   family = negbinomial(),              # allows overdispersion
-#   prior  = c(
-#     prior(normal(0, 2), class = "b"),  # on log mean
-#     prior(exponential(1), class = "shape")
-#   ),
-#   chains = 4, iter = 4000, cores = 4, seed = 2
-# )
-# 
-# # Work on the response scale (expected richness)
-# epred_S <- posterior_epred(fit_S, newdata = tibble(Site = factor(c("H","L"), levels = c("L","H"))))
-# diff_S  <- epred_S[, 1] - epred_S[, 2]          # H - L (response scale)
-# 
-# # ---------- 3) Evenness J′ : Beta ----------
-# fit_J <- brm(
-#   Evenness_beta ~ 0 + Site,
-#   data   = div,
-#   family = Beta(),
-#   prior  = c(
-#     prior(normal(0, 1.5), class = "b"),  # on logit(mu)
-#     prior(gamma(2, 0.5), class = "phi")
-#   ),
-#   chains = 4, iter = 4000, cores = 4, seed = 3
-# )
-# 
-# # Expected evenness on response scale
-# epred_J <- posterior_epred(fit_J, newdata = tibble(Site = factor(c("H","L"), levels = c("L","H"))))
-# diff_J  <- epred_J[, 1] - epred_J[, 2]          # H - L
-# 
-# # ---------- Summaries (posterior contrasts) ----------
-# summ <- function(x, rope = c(NA, NA)) {
-#   tibble(
-#     mean    = mean(x),
-#     median  = median(x),
-#     ci_low  = quantile(x, 0.025),
-#     ci_high = quantile(x, 0.975),
-#     p_gt0   = mean(x > 0),
-#     p_lt0   = mean(x < 0),
-#     rope_lo = rope[1],
-#     rope_hi = rope[2],
-#     rope_in = if (any(is.na(rope))) NA_real_ else mean(x > rope[1] & x < rope[2])
-#   )
-# }
-# 
-# # Set small ROPEs (adjust to your scientific relevance)
-# rope_H <- c(-0.10,  0.10)   # Shannon units
-# rope_S <- c(-1.00,  1.00)   # species
-# rope_J <- c(-0.05,  0.05)   # evenness units
-# 
-# results_bayes <- bind_rows(
-#   summ(diff_H, rope_H) %>% mutate(metric = "Shannon H′ (H–L)"),
-#   summ(diff_S, rope_S) %>% mutate(metric = "Richness S (H–L)"),
-#   summ(diff_J, rope_J) %>% mutate(metric = "Evenness J′ (H–L)")
-# ) %>% select(metric, everything())
-# 
-# results_bayes
+# Dunn pairwise per metric
+dunn_all <- core_long %>%
+  group_by(metric) %>%
+  dunn_test(value ~ Site, p.adjust.method = "BH") %>%
+  add_xy_position(x = "Site", step.increase = 0.08)   # nicer stacking of brackets
+
+# (Optional) counts per Site for labels
+counts <- core_long %>%
+  distinct(Core, Site) %>%
+  count(Site, name = "n")
+
+# -------------------------------------------------------------------
+# 4) Faceted boxplots (one facet per metric) + per-facet Dunn brackets
+# -------------------------------------------------------------------
+p_facets <- ggplot(core_long, aes(Site, value, fill = Site)) +
+  geom_boxplot(width = 0.65, alpha = 0.6, color = "black", outlier.shape = NA) +
+  stat_summary(fun = median, geom = "point", shape = 95, size = 7, color = "black") +
+  facet_wrap(~ metric, scales = "free_y") +
+  scale_fill_brewer(palette = "Set2") +
+  guides(fill = "none") +
+  labs(title = "Site-level diversity (computed per core)",
+       x = NULL, y = NULL) +
+  theme_minimal(base_size = 15) +
+  theme(
+    plot.title = element_text(face = "bold", hjust = 0.5, size = 16),
+    axis.text.x = element_text(face = "bold"),
+    panel.grid.minor = element_blank()
+  )
+
+# Add p-value brackets per facet
+p_facets + stat_pvalue_manual(
+  dunn_all,
+  label = "p.adj.signif",    # or "p.adj" for numeric p-values
+  tip.length = 0.01,
+  bracket.size = 0.8,
+  hide.ns = TRUE,
+  facet.by = "metric"
+)
+
 ```
 
-@fig-Biv_diversity_m2 shows per-core diversity for the two areas. Each dot is a core (colored by site) and panels display Shannon diversity (H′), species richness (S), and Pielou evenness (J′). Cores from area H generally sit higher for H′ and S, with less separation for J′.
-
-Bayesian comparisons (reported as H–L) supported these patterns. Shannon diversity was higher in site H, with a mean difference of +0.365 (95% CrI [0.155, 0.579]) and a posterior probability of $P(H\!-\!L>0)=1.00$. Very little posterior mass fell within a ±0.10 region of practical equivalence (ROPE), indicating that the increase was both statistically credible and ecologically meaningful. Species richness was also greater in H, with an average difference of +1.23 species per core (95% CrI \[0.17, 2.31], $P>0=0.988$). Approximately one-third of the posterior distribution lay within a ±1 species ROPE, suggesting a positive but modest gain in richness. In contrast, evenness showed only a small and uncertain difference +0.116 (95% CrI \[−0.020, 0.247], $P>0=0.956$), with \~15% of the posterior mass within a ±0.05 ROPE.
-
-Overall, area H hosts richer and more diverse bivalve assemblages than area L, while evenness is at most slightly higher in H and may be similar between areas.
+@fig-Biv_diversity_m2 shows the site-level diversity indices computed per core for sites H and L. Evenness (J′) values were similar between sites, with medians close to 0.9. Species richness (S) was significantly higher at site H, with a median of about 3 species per core, compared to only 2 species per core at site L. Likewise, Shannon diversity (H′) was significantly higher at site H, where cores displayed consistently greater diversity compared to site L, which showed lower median values and higher variability.
 
 ## Relationship between bivalve abundance and seagrass biomass
 
